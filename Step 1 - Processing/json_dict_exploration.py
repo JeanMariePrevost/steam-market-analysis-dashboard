@@ -13,7 +13,7 @@ import pandas as pd
 file_path = (
     # r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\fronkongames_steam-games-dataset\games.json"  # Replace with your JSON file path
     # r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\sujaykapadnis_games-on-steam\steamdb.json"  # Replace with your JSON file path
-    r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\souyama_steam-dataset\steam_dataset\appinfo\dlc_data\steam_dlc_data.json"  # Replace with your JSON file path
+    r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\fronkongames_steam-games-dataset\games.json"  # Replace with your JSON file path
 )
 with open(file_path, "r", encoding="utf-8") as f:
     data: dict = json.load(f)
@@ -61,18 +61,44 @@ def flatten_dict(source_dict, parent_key="", sep=".", max_depth=1, current_depth
     return dict(items)
 
 
-# Select up to N random elements
-num_samples = min(10, len(data))
-random_elements = [data[key] for key in random.sample(list(data.keys()), num_samples)]
+# # Select up to N random elements
+# num_samples = min(10, len(data))
+# random_elements = [data[key] for key in random.sample(list(data.keys()), num_samples)]
 
-# Flatten all sampled elements
-flattened_elements = [flatten_dict(elem, max_depth=0) for elem in random_elements]
+# # Flatten all sampled elements
+# flattened_elements = [flatten_dict(elem, max_depth=0) for elem in random_elements]
 
-# Convert the flattened elements into a DataFrame
-df = pd.DataFrame(flattened_elements)
+# # Convert the flattened elements into a DataFrame
+# df = pd.DataFrame(flattened_elements)
+
+# # Write the DataFrame to a CSV file
+# csv_file = "sampled_data.csv"
+# df.to_csv(csv_file, index=False, encoding="utf-8")
+# print(f"CSV file '{csv_file}' created successfully.")
+
+#
+#
+#
+#
+#
+
+# Convert the entire dataset to a DataFrame by iterating across all rows manually and printing progress
+all_rows = []
+for i, key in enumerate(data.keys()):
+    flattened_data = flatten_dict(data[key], max_depth=0)
+    flattened_data["appid"] = key  # Add the key as a column
+    all_rows.append(flattened_data)  # Append dictionary to a list
+
+    if i % 100 == 0:
+        print(f"Processed {i}/{len(data)} rows. ({i / len(data) * 100:.2f}%)")
+
+# Convert list of dictionaries into a DataFrame in one step
+print("Converting to DataFrame...")
+df_all = pd.DataFrame(all_rows)
 
 # Write the DataFrame to a CSV file
-csv_file = "sampled_data.csv"
-df.to_csv(csv_file, index=False, encoding="utf-8")
+print("Writing to CSV file...")
+csv_file_all = "json_data.csv"
+df_all.to_csv(csv_file_all, index=False, encoding="utf-8")
 
-print(f"CSV file '{csv_file}' created successfully.")
+print(f"CSV file '{csv_file_all}' created successfully.")
