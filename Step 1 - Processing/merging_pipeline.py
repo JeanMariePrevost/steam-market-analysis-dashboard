@@ -6,6 +6,7 @@ The process is not particularly clean or optimized, but it should be a one-time 
 import json
 import random
 import pandas as pd
+import numpy as np
 from complex_merge import merge_dataframes_with_mappings, combine_list_unique_values
 
 # Selected datasets paths
@@ -22,6 +23,8 @@ set10_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\da
 set11_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\souyama_steam-dataset\steam_dataset\appinfo\store_data\steam_store_data.json"  # F2P, required age, what is price_overview?, whether games have demos...
 
 # TO consider: antonkozyriev_game-recommendations-on-steam	games_metadata.json for its long tags list (unweighted)
+
+combined_df = pd.DataFrame()  # The "container" for the final merged DataFrame
 
 
 def apply_mappings(df, mappings, keep_only_mapped_columns=False) -> pd.DataFrame:
@@ -86,7 +89,6 @@ def average_range_string(value, separator=" - "):
 # Set 1 processing
 # ===================================================================================================
 # ===================================================================================================
-combined_df = pd.DataFrame()  # The "container" for the final merged DataFrame
 
 print("Processing set 1...")
 
@@ -177,7 +179,7 @@ if True:  # Temporarily disable this block while working on the others
         ("win", "windows", None),
         ("mac", "mac", None),
         ("linux", "linux", None),
-        ("price_final", "price_2024-08", None),
+        ("price_final", "price_2024_08", None),
         ("price_original", "price_original", None),
         ("steam_deck", "steam_deck", None),
     ]
@@ -275,7 +277,7 @@ combined_df.to_csv("combined_df_step3.csv", index=False)
 # ===================================================================================================
 print("Processing set 4...")
 print("NOTE: Skipping set 4 processing due to difficulties in properly formatting the JSON data into compatible tabular data.")
-# NOTE: Currently skipped due to difficulties in properly formatting the JSON data into compatible tabular data.
+# NOTE: Currently skipped due to difficulties in properly formatting the JSON _nested_ data structures into compatible tabular data.
 # df_set4 = pd.read_csv(set3_path)
 
 
@@ -301,7 +303,7 @@ mappings = [
     ("average_playtime", "average_playtime_forever", None),
     ("median_playtime", "median_playtime_forever", None),
     ("owners", "estimated_owners", lambda x: average_range_string(x, "-")),
-    ("price", "price_2019-06", None),
+    ("price", "price_2019_06", None),
 ]
 
 
@@ -324,3 +326,168 @@ combined_df = merge_dataframes_with_mappings(combined_df, df_set5, merge_mapping
 
 # DEBUG - Save the combined DataFrame to a CSV file
 combined_df.to_csv("combined_df_step5.csv", index=False)
+
+
+# ===================================================================================================
+# ===================================================================================================
+# Set 6 processing
+# ===================================================================================================
+# ===================================================================================================
+# NOTE -  Set dates 2025-01
+# NOTE - release_date can be "Not Released" instead of a date
+
+print("Processing set 6...")
+df_set6 = pd.read_csv(set6_path)
+
+# Split "platforms" (e.g. ['windows', 'mac', "linux']) into separate boolean columns
+df_set6["windows"] = df_set6["platforms"].apply(lambda x: "windows" in x)
+df_set6["mac"] = df_set6["platforms"].apply(lambda x: "mac" in x)
+df_set6["linux"] = df_set6["platforms"].apply(lambda x: "linux" in x)
+
+
+mappings = [
+    ("steam_appid", "appid", None),
+    ("name", "name", None),
+    ("release_date", "release_date", None),
+    ("developers", "developers", None),
+    ("publishers", "publishers", None),
+    ("categories", "categories", None),
+    ("genres", "genres", None),
+    ("required_age", "required_age", None),
+    ("n_achievements", "achievements", None),
+    ("windows", "windows", None),
+    ("mac", "mac", None),
+    ("linux", "linux", None),
+    ("total_positive", "positive", None),
+    ("total_negative", "negative", None),
+    ("metacritic", "metacritic_score", None),
+    ("price_initial (USD)", "price_original", None),
+    ("is_free", "is_free", None),
+]
+
+
+print(f"Head before: {df_set6.head()}")
+df_set6 = apply_mappings(df_set6, mappings, keep_only_mapped_columns=True)
+print(f"Head after: {df_set6.head()}")
+
+
+# Save the processed dataset
+df_set6.to_csv("set6_processed.csv", index=False)
+
+
+merge_mappings = {
+    "developers": combine_list_unique_values,
+    "publishers": combine_list_unique_values,
+    "categories": combine_list_unique_values,
+    "genres": combine_list_unique_values,
+}
+
+combined_df = merge_dataframes_with_mappings(combined_df, df_set6, merge_mappings)
+
+# DEBUG - Save the combined DataFrame to a CSV file
+combined_df.to_csv("combined_df_step6.csv", index=False)
+
+
+# ===================================================================================================
+# ===================================================================================================
+# Set 7 processing
+# ===================================================================================================
+# ===================================================================================================
+# NOTE -  Set 7 is a simpler JSON file that easily converts to a DataFrame
+print("Processing set 7...")
+
+with open(set7_path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+df_set7 = pd.DataFrame(data)
+
+
+# Split "platforms" (e.g. ['windows', 'mac', "linux']) into separate boolean columns
+df_set7["windows"] = df_set7["platforms"].apply(lambda x: "WIN" in x)
+df_set7["mac"] = df_set7["platforms"].apply(lambda x: "MAC" in x)
+df_set7["linux"] = df_set7["platforms"].apply(lambda x: "LNX" in x)
+
+
+mappings = [
+    ("sid", "appid", None),
+    ("published_store", "release_date", None),
+    ("name", "name", None),
+    ("full_price", "price_original", lambda x: float(x) / 100 if isinstance(x, (int, float)) else np.nan),  # Convert cents to dollars
+    ("current_price", "price_2023_11", lambda x: float(x) / 100 if isinstance(x, (int, float)) else np.nan),  # Convert cents to dollars
+    ("windows", "windows", None),
+    ("mac", "mac", None),
+    ("linux", "linux", None),
+    ("developers", "developers", split_string_to_list),
+    ("publishers", "publishers", split_string_to_list),
+    ("languages", "supported_languages", split_string_to_list),
+    ("voiceovers", "full_audio_languages", split_string_to_list),
+    ("categories", "categories", split_string_to_list),
+    ("genres", "genres", split_string_to_list),
+    ("tags", "tags", split_string_to_list),
+    ("gfq_difficulty", "gamefaqs_difficulty_rating", None),
+    ("gfq_rating", "gamefaqs_review_score", None),
+    ("gfq_length", "gamefaqs_game_length", None),
+    ("stsp_owners", "steam_spy_estimated_owners", None),
+    ("hltb_single", "hltb_single", None),
+    ("hltb_complete", "hltb_complete", None),
+    ("meta_uscore", "metacritic_score", None),
+    ("igdb_uscore", "igdb_review_score", None),
+    ("igdb_single", "igdb_single", None),
+    ("igdb_complete", "igdb_complete", None),
+]
+
+
+print(f"Head before: {df_set7.head()}")
+df_set7 = apply_mappings(df_set7, mappings, keep_only_mapped_columns=True)
+print(f"Head after: {df_set7.head()}")
+
+# Save the processed dataset
+df_set7.to_csv("set7_processed.csv", index=False)
+
+merge_mappings = {
+    "developers": combine_list_unique_values,
+    "publishers": combine_list_unique_values,
+    "supported_languages": combine_list_unique_values,
+    "full_audio_languages": combine_list_unique_values,
+    "categories": combine_list_unique_values,
+    "genres": combine_list_unique_values,
+    "tags": combine_list_unique_values,
+}
+
+combined_df = merge_dataframes_with_mappings(combined_df, df_set7, merge_mappings)
+
+# DEBUG - Save the combined DataFrame to a CSV file
+combined_df.to_csv("combined_df_step7.csv", index=False)
+
+
+# ===================================================================================================
+# ===================================================================================================
+# Set 8 processing
+# ===================================================================================================
+# ===================================================================================================
+
+df_set8 = pd.read_csv(set8_path)
+
+mappings = [
+    ("game_id", "appid", None),
+    ("early_access", "early_access", None),
+    ("title", "name", None),
+    ("tag_list", "tags", split_string_to_list),
+    ("vr_only", "vr_only", None),
+    ("vr_supported", "vr_supported", None),
+]
+
+
+df_set8 = apply_mappings(df_set8, mappings, keep_only_mapped_columns=True)
+
+# Save the processed dataset
+df_set8.to_csv("set8_processed.csv", index=False)
+
+merge_mappings = {
+    "tags": combine_list_unique_values,
+}
+
+combined_df = merge_dataframes_with_mappings(combined_df, df_set8, merge_mappings)
+
+# DEBUG - Save the combined DataFrame to a CSV file
+combined_df.to_csv("combined_df_step8.csv", index=False)

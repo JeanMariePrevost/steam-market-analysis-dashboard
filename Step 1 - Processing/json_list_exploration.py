@@ -23,7 +23,7 @@ print(f"The root is a list with {len(data)} elements.")
 
 
 # Function to flatten a dictionary
-def flatten_dict(d, parent_key="", sep=".", max_depth=1, current_depth=0):
+def flatten_json_list(d, parent_key="", sep=".", max_depth=1, current_depth=0):
     """
     Recursively flattens a dictionary up to a specified depth.
     Beyond the max_depth, nested structures are represented as strings or summaries.
@@ -36,7 +36,7 @@ def flatten_dict(d, parent_key="", sep=".", max_depth=1, current_depth=0):
         new_key = f"{parent_key}{sep}{k}" if parent_key else k
         if isinstance(v, dict) and current_depth < max_depth:
             # Recurse into the dictionary if within depth limit
-            items.extend(flatten_dict(v, new_key, sep, max_depth, current_depth + 1).items())
+            items.extend(flatten_json_list(v, new_key, sep, max_depth, current_depth + 1).items())
         elif isinstance(v, dict):
             # Beyond max depth, represent as a string
             items.append((new_key, f"NestedDict[{len(v)} keys]"))
@@ -57,7 +57,7 @@ num_samples = min(10, len(data))
 random_elements = random.sample(data, num_samples)
 
 # Flatten all sampled elements
-flattened_elements = [flatten_dict(elem, max_depth=0) for elem in random_elements]
+flattened_elements = [flatten_json_list(elem, max_depth=0) for elem in random_elements]
 
 # Convert the flattened elements into a DataFrame
 df = pd.DataFrame(flattened_elements)
