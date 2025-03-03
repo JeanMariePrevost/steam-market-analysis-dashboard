@@ -1,6 +1,15 @@
 """
 This module provides a way to merge dataframes by using various strategies, such as
 defining which set takes precendence over the other, or combining lists of values.
+
+Example usage:
+    from complex_merge import merge_dataframes, combine_list_unique_values
+
+    merge_mappings = {
+        "supported_languages": combine_list_unique_values,
+    }
+
+    merged_df = merge_dataframes(master_df, slave_df, merge_mappings)
 """
 
 import pandas as pd
@@ -34,13 +43,14 @@ def combine_list_unique_values(master_col, slave_col):
     return master_col.combine(slave_col, lambda a, b: list(set(a) | set(b)) if isinstance(a, list) and isinstance(b, list) else a)
 
 
-def merge_dataframes(master_df, slave_df, column_mappings):
+def merge_dataframes_with_mappings(master_df, slave_df, column_mappings):
     """
     Merges two DataFrames based on a set of column-specific merge strategies.
     The column_mappings dictionary should contain column names as keys and merge functions as values.
 
     Note: this module provides general merge functions already.
     """
+    print("Merging DataFrames...")
 
     # Step 1: Perform an outer merge on "appid" (keep all rows from both DataFrames, overwrite nothing since we use suffixes)
     merged_df = pd.merge(master_df, slave_df, on="appid", how="outer", suffixes=("_master", "_slave"))

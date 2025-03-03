@@ -6,6 +6,7 @@ The process is not particularly clean or optimized, but it should be a one-time 
 import json
 import random
 import pandas as pd
+from complex_merge import merge_dataframes_with_mappings, combine_list_unique_values
 
 # Selected datasets paths
 set1_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\artermiloff_steam-games-dataset\games_may2024_cleaned.csv"  # Great general metadata foundation
@@ -30,6 +31,11 @@ def apply_mappings(df, mappings, keep_only_mapped_columns=False) -> pd.DataFrame
     """
     print(f"Starting columns: {df.columns}")
 
+    # Validate source names exist in the DataFrame
+    for source_name, _, _ in mappings:
+        if source_name not in df.columns:
+            raise ValueError(f"Source column '{source_name}' not found in the DataFrame.")
+
     if keep_only_mapped_columns:
         print("Keeping only mapped columns")
         mapped_columns = {src for src, _, _ in mappings}
@@ -50,13 +56,41 @@ def apply_mappings(df, mappings, keep_only_mapped_columns=False) -> pd.DataFrame
     return df
 
 
+#####################################
+# In-place tranform functions
+#####################################
+def split_string_to_list(value, separator=","):
+    """Converts a string into a list by splitting on the given separator."""
+    return value.split(separator) if isinstance(value, str) else []
+
+
+def count_items_in_string(value, separator=","):
+    """Counts the number of items in a string by splitting on the given separator."""
+    return len(value.split(separator)) if isinstance(value, str) else 0
+
+
+def average_range_string(value, separator=" - "):
+    """Converts a range string (e.g., '100 - 200') into its average."""
+    if isinstance(value, str):
+        try:
+            numbers = list(map(int, value.split(separator)))
+            return sum(numbers) / len(numbers) if numbers else 0
+        except ValueError:
+            print(f"Error converting range string to average: ({value}). (Is the separator correct?)")
+            return 0
+    return 0
+
+
 # ===================================================================================================
 # ===================================================================================================
 # Set 1 processing
 # ===================================================================================================
 # ===================================================================================================
+combined_df = pd.DataFrame()  # The "container" for the final merged DataFrame
 
-if False:  # Temporarily disable this block while working on the others
+print("Processing set 1...")
+
+if True:  # Temporarily disable this block while working on the others
     df_set1 = pd.read_csv(set1_path)
 
     # DEBUG - Print column names
@@ -110,34 +144,59 @@ if False:  # Temporarily disable this block while working on the others
     df_set1.to_csv("set1_processed.csv", index=False)
     print("Processed dataset saved to set1_processed.csv")
 
+    combined_df = df_set1  # Set the combined DataFrame to the processed set 1
+
 
 # ===================================================================================================
 # ===================================================================================================
 # Set 2 processing
 # ===================================================================================================
 # ===================================================================================================
+print("Processing set 2...")
 
-if False:  # Temporarily disable this block while working on the others
+if True:  # Temporarily disable this block while working on the others
     df_set2 = pd.read_csv(set2_path)
 
     # DEBUG - Print column names
     print("Original Columns:")
     print(df_set2.columns)
 
-    # Rename "app_id" to "appid" to match the other datasets
-    df_set2.rename(columns={"app_id": "appid"}, inplace=True)
+    columns_to_drop = [
+        "rating",
+        "discount",
+        "positive_ratio",
+        "user_reviews",
+    ]
 
-    # Keep only "price_original" and "steam_deck" columns, with app_id as index to merge on
-    columns_to_keep = ["appid", "price_original", "steam_deck"]
-    df_set2 = df_set2[columns_to_keep]
+    df_set2.drop(columns=columns_to_drop, inplace=True)
 
-    # Print new column names
-    print("Remaining Columns:")
-    print(df_set2.columns)
+    mappings = [
+        ("app_id", "appid", None),
+        ("title", "name", None),
+        ("date_release", "release_date", None),
+        ("win", "windows", None),
+        ("mac", "mac", None),
+        ("linux", "linux", None),
+        ("price_final", "price_2024-08", None),
+        ("price_original", "price_original", None),
+        ("steam_deck", "steam_deck", None),
+    ]
+
+    # TODO - Consider calculating positive and negative columns from "positive_ratio" and "user_reviews"
+
+    print(f"Head before: {df_set2.head()}")
+    df_set2 = apply_mappings(df_set2, mappings, keep_only_mapped_columns=True)
+    print(f"Head after: {df_set2.head()}")
 
     # Save the processed dataset
     df_set2.to_csv("set2_processed.csv", index=False)
     print("Processed dataset saved to set2_processed.csv")
+
+    # Merge the processed set 2 into the combined DataFrame
+    combined_df = merge_dataframes_with_mappings(combined_df, df_set2, {})
+
+    # DEBUG - Save the combined DataFrame to a CSV file
+    combined_df.to_csv("combined_df_step2.csv", index=False)
 
 
 # ===================================================================================================
@@ -145,15 +204,9 @@ if False:  # Temporarily disable this block while working on the others
 # Set 3 processing
 # ===================================================================================================
 # ===================================================================================================
+print("Processing set 3...")
 
 df_set3 = pd.read_csv(set3_path)  # HEADS UP! This dataset had a missing comma between "Discount" and "DLC Count", causing a shift in the columns. I fixed it manually in the file.
-
-# DEBUG - Print column names
-# print("Original Columns:")
-# print(df_set3.columns)
-
-# "Fill in the blanks" with the data from set1
-# Anything this set has that the others don't, we add in a way that matches the other sets
 
 # Mappings of (set 3 column, set 1 column, transform function)
 mappings = [
@@ -175,16 +228,16 @@ mappings = [
     ("Median playtime forever", "median_playtime_forever", None),
     ("Median playtime two weeks", "median_playtime_2weeks", None),
     ("Peak CCU", "peak_ccu", None),
-    ("Developers", "developers", lambda x: x.split(",") if isinstance(x, str) else []),  # Turn the string into a list
-    ("Publishers", "publishers", lambda x: x.split(",") if isinstance(x, str) else []),  # Turn the string into a list
-    ("Categories", "categories", lambda x: x.split(",") if isinstance(x, str) else []),  # Turn the string into a list
-    ("Genres", "genres", lambda x: x.split(",") if isinstance(x, str) else []),  # Turn the string into a list
-    ("Tags", "tags", lambda x: x.split(",") if isinstance(x, str) else []),  # Turn the string into a list
-    ("Screenshots", "screenshots", lambda x: len(x.split(",")) if isinstance(x, str) else 0),  # Turn it into the NUMBER of screenshots
-    ("Movies", "movies", lambda x: len(x.split(",")) if isinstance(x, str) else 0),  # Turn it into the NUMBER of movies
+    ("Developers", "developers", split_string_to_list),
+    ("Publishers", "publishers", split_string_to_list),
+    ("Categories", "categories", split_string_to_list),
+    ("Genres", "genres", split_string_to_list),
+    ("Tags", "tags", split_string_to_list),
+    ("Screenshots", "screenshots", count_items_in_string),
+    ("Movies", "movies", count_items_in_string),
     ("Positive", "positive", None),
     ("Negative", "negative", None),
-    ("Estimated owners", "estimated_owners", lambda x: sum(map(int, x.split(" - "))) / 2 if isinstance(x, str) else 0),  # Turn the range into its average
+    ("Estimated owners", "estimated_owners", average_range_string),
 ]
 
 
@@ -197,10 +250,77 @@ print(f"Head after: {df_set3.head()}")
 df_set3.to_csv("set3_processed.csv", index=False)
 
 
+# Merge the processed set 3 into the combined DataFrame
+
+
+merge_mappings = {
+    "supported_languages": combine_list_unique_values,
+    "full_audio_languages": combine_list_unique_values,
+    "developers": combine_list_unique_values,
+    "publishers": combine_list_unique_values,
+    "categories": combine_list_unique_values,
+    "genres": combine_list_unique_values,
+    "tags": combine_list_unique_values,
+}
+
+combined_df = merge_dataframes_with_mappings(combined_df, df_set3, merge_mappings)
+
+# DEBUG - Save the combined DataFrame to a CSV file
+combined_df.to_csv("combined_df_step3.csv", index=False)
+
 # ===================================================================================================
 # ===================================================================================================
 # Set 4 processing
 # ===================================================================================================
 # ===================================================================================================
+print("Processing set 4...")
+print("NOTE: Skipping set 4 processing due to difficulties in properly formatting the JSON data into compatible tabular data.")
+# NOTE: Currently skipped due to difficulties in properly formatting the JSON data into compatible tabular data.
+# df_set4 = pd.read_csv(set3_path)
 
-df_set4 = pd.read_csv(set3_path)
+
+# ===================================================================================================
+# ===================================================================================================
+# Set 5 processing
+# ===================================================================================================
+# ===================================================================================================
+print("Processing set 5...")
+
+df_set5 = pd.read_csv(set5_path)
+
+mappings = [
+    ("appid", "appid", None),
+    ("name", "name", None),
+    ("release_date", "release_date", None),
+    ("developer", "developers", lambda x: split_string_to_list(x, ";")),
+    ("publisher", "publishers", lambda x: split_string_to_list(x, ";")),
+    ("categories", "categories", lambda x: split_string_to_list(x, ";")),
+    ("genres", "genres", lambda x: split_string_to_list(x, ";")),
+    ("positive_ratings", "positive", None),
+    ("negative_ratings", "negative", None),
+    ("average_playtime", "average_playtime_forever", None),
+    ("median_playtime", "median_playtime_forever", None),
+    ("owners", "estimated_owners", lambda x: average_range_string(x, "-")),
+    ("price", "price_2019-06", None),
+]
+
+
+print(f"Head before: {df_set5.head()}")
+df_set5 = apply_mappings(df_set5, mappings, keep_only_mapped_columns=True)
+print(f"Head after: {df_set5.head()}")
+
+# Save the processed dataset
+df_set5.to_csv("set5_processed.csv", index=False)
+
+
+merge_mappings = {
+    "developers": combine_list_unique_values,
+    "publishers": combine_list_unique_values,
+    "categories": combine_list_unique_values,
+    "genres": combine_list_unique_values,
+}
+
+combined_df = merge_dataframes_with_mappings(combined_df, df_set5, merge_mappings)
+
+# DEBUG - Save the combined DataFrame to a CSV file
+combined_df.to_csv("combined_df_step5.csv", index=False)
