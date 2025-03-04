@@ -22,7 +22,7 @@ set9_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\dat
 set10_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\souyama_steam-dataset\steam_dataset\steamspy\detailed\steam_spy_detailed.json"  # Owners, CCU, detailled tags
 set11_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\souyama_steam-dataset\steam_dataset\appinfo\store_data\steam_store_data.json"  # F2P, required age, what is price_overview?, whether games have demos...
 
-# TO consider: antonkozyriev_game-recommendations-on-steam	games_metadata.json for its long tags list (unweighted)
+# To consider: antonkozyriev_game-recommendations-on-steam	games_metadata.json for its long tags list (unweighted)
 
 combined_df = pd.DataFrame()  # The "container" for the final merged DataFrame
 
@@ -79,7 +79,7 @@ def average_range_string(value, separator=" - "):
             numbers = list(map(int, value.split(separator)))
             return sum(numbers) / len(numbers) if numbers else 0
         except ValueError:
-            print(f"Error converting range string to average: ({value}). (Is the separator correct?)")
+            print(f'Error converting range string to average: ({value}). (Is the separator "{separator}" correct?)')
             return 0
     return 0
 
@@ -465,6 +465,7 @@ combined_df.to_csv("combined_df_step7.csv", index=False)
 # Set 8 processing
 # ===================================================================================================
 # ===================================================================================================
+print("Processing set 8...")
 
 df_set8 = pd.read_csv(set8_path)
 
@@ -491,3 +492,85 @@ combined_df = merge_dataframes_with_mappings(combined_df, df_set8, merge_mapping
 
 # DEBUG - Save the combined DataFrame to a CSV file
 combined_df.to_csv("combined_df_step8.csv", index=False)
+
+
+# ===================================================================================================
+# ===================================================================================================
+# Set 9 processing
+# ===================================================================================================
+# ===================================================================================================
+print("Processing set 9...")
+
+df_set9 = pd.read_csv(set9_path)
+
+
+# Split "platforms" (e.g. ['windows', 'mac', "linux']) into separate boolean columns
+df_set9["windows"] = df_set9["platforms"].apply(lambda x: "windows" in x)
+df_set9["mac"] = df_set9["platforms"].apply(lambda x: "mac" in x)
+df_set9["linux"] = df_set9["platforms"].apply(lambda x: "linux" in x)
+
+# Fix the weird "owners" column format that has ranges like "10,000,000 .. 20,000,000"
+df_set9["owners"] = df_set9["owners"].apply(lambda x: x.replace(",", "").replace(" .. ", " - ") if isinstance(x, str) else x)
+
+
+mappings = [
+    ("id", "appid", None),
+    ("name", "name", None),
+    ("developers", "developers", None),
+    ("publishers", "publishers", None),
+    ("release_date", "release_date", None),
+    ("initialprice", "price_original", None),
+    ("drm", "has_drm", None),
+    ("controller_support", "controller_support", None),
+    ("demos", "has_demos", None),
+    ("vr_only", "vr_only", None),
+    ("vr_supported", "vr_supported", None),
+    ("supported_languages", "supported_languages", split_string_to_list),
+    ("voice_languages", "full_audio_languages", split_string_to_list),
+    ("metacritic", "metacritic_score", lambda x: np.nan if (x == "FALSE" or x == "False" or x == False) else float(x)),  # Convert to float, or np.nan if "FALSE"
+    ("total_positive", "positive", None),
+    ("total_negative", "negative", None),
+    ("playtime_mean_forever", "average_playtime_forever", None),
+    ("playtime_median_forever", "median_playtime_forever", None),
+    ("playtime_mean_last2weeks", "average_playtime_2weeks", None),
+    ("playtime_median_last2weeks", "median_playtime_2weeks", None),
+    ("peak_players_17April2022", "peak_ccu", None),
+    ("owners", "estimated_owners", average_range_string),
+]
+
+df_set9 = apply_mappings(df_set9, mappings, keep_only_mapped_columns=True)
+
+# Save the processed dataset
+df_set9.to_csv("set9_processed.csv", index=False)
+
+merge_mappings = {
+    "developers": combine_list_unique_values,
+    "publishers": combine_list_unique_values,
+    "supported_languages": combine_list_unique_values,
+    "full_audio_languages": combine_list_unique_values,
+}
+
+combined_df = merge_dataframes_with_mappings(combined_df, df_set9, merge_mappings)
+
+# DEBUG - Save the combined DataFrame to a CSV file
+combined_df.to_csv("combined_df_step9.csv", index=False)
+
+
+# ===================================================================================================
+# ===================================================================================================
+# Set 10 processing
+# ===================================================================================================
+# ===================================================================================================
+print("Processing set 10...")
+print("NOTE: Skipping set 10 processing due to difficulties in properly formatting the JSON data into compatible tabular data.")
+# NOTE: Currently skipped due to difficulties in properly formatting the JSON _nested_ data structures into compatible tabular data.
+
+
+# ===================================================================================================
+# ===================================================================================================
+# Set 11 processing
+# ===================================================================================================
+# ===================================================================================================
+print("Processing set 11...")
+print("NOTE: Skipping set 11 processing due to difficulties in properly formatting the JSON data into compatible tabular data.")
+# NOTE: Currently skipped due to difficulties in properly formatting the JSON _nested_ data structures into compatible tabular data.
