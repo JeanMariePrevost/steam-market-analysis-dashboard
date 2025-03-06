@@ -9,17 +9,36 @@ from complex_merge import merge_dataframes_with_mappings, combine_list_unique_va
 ####################################################################
 # Helper functions
 ####################################################################
-def enforce_numerical_column(df, column_name):
-    """Enforces a columns as numerical, squashing all non-numeric values to NaN, and validates the column."""
+def enforce_float_or_nan_column(df, column_name):
+    """Enforces a column as floats, squashing all non-numeric values to NaN."""
+    if column_name not in df.columns:
+        raise KeyError(f"Column '{column_name}' does not exist in the DataFrame.")
     df[column_name] = pd.to_numeric(df[column_name], errors="coerce")
-    is_valid = df[column_name].dropna().apply(lambda x: isinstance(x, (int, float))).all()
-    print(f"{column_name} fully numerical: {is_valid} ✅")
+    print(f"{column_name} fully numerical (floats) ✅")
 
 
-def enforce_boolean_column(df, column_name):
-    """Enforces a columns as boolean, squashing all non-boolean values to NaN"""
-    df[column_name] = df[column_name].apply(lambda x: x if x in [True, False] else np.nan)
+def enforce_int_or_nan_column(df, column_name, verbose=True):
+    """Enforces a column as integers, squashing all non-numeric values to NaN. Any floats will also be converted to integers (truncated)."""
+    if column_name not in df.columns:
+        raise KeyError(f"Column '{column_name}' does not exist in the DataFrame.")
+    df[column_name] = pd.to_numeric(df[column_name], errors="coerce").astype("Int64")
+    print(f"{column_name} fully numerical (integers) ✅")
+
+
+def enforce_boolean_or_nan_column(df, column_name):
+    """Enforces a column as boolean, squashing all non-boolean values to NaN."""
+    if column_name not in df.columns:
+        raise KeyError(f"Column '{column_name}' does not exist in the DataFrame.")
+    df[column_name] = df[column_name].apply(lambda x: x if x in [True, False] else np.nan).astype("boolean")
     print(f"{column_name} fully boolean ✅")
+
+
+def enforce_string_or_nan_column(df, column_name):
+    """Ensures a column is fully string, coercing invalid values to NaN."""
+    if column_name not in df.columns:
+        raise KeyError(f"Column '{column_name}' does not exist in the DataFrame.")
+    df[column_name] = df[column_name].apply(lambda x: x if isinstance(x, str) else np.nan)
+    print(f"{column_name} fully string ✅")
 
 
 def enforce_datetime_column(df, column_name):
@@ -35,7 +54,7 @@ def enforce_datetime_column(df, column_name):
     ]
 
     def try_parsing_date(value):
-        if pd.isna(value) or value == "" or value.lower() in ["not released", "not_released", "coming soon", "coming_soon", "unknown"]:
+        if pd.isna(value) or value == "" or (isinstance(value, str) and value.lower() in ["not released", "not_released", "coming soon", "coming_soon", "unknown"]):
             return pd.NaT  # Keep NaN as NaT
         if isinstance(value, pd.Timestamp):
             return value  # Already correct format
@@ -55,14 +74,18 @@ def enforce_datetime_column(df, column_name):
 
         raise ValueError(f"Invalid date format in {column_name}: {repr(value)}")
 
+    # Apply the parsing function
     df[column_name] = df[column_name].apply(try_parsing_date)
+
+    # Ensure the column is explicitly datetime64[ns]
+    df[column_name] = pd.to_datetime(df[column_name], errors="coerce")
 
     print(f"{column_name} fully datetime ✅")
 
 
-def validate_list_column(df, column_name):
+def enforce_list_column(df, column_name):
     """
-    Ensures every cell of a column is a list<string> or NaN
+    Ensures every cell of a column is a list<string> or [], squashing all invalid values to [].
     """
 
     def validate_and_fix(value):
@@ -79,10 +102,10 @@ def validate_list_column(df, column_name):
     # Apply the function to enforce correctness
     df[column_name] = df[column_name].apply(validate_and_fix)
 
-    print(f"{column_name} fully list<string> or NaN ✅")
+    print(f"{column_name} fully list<string> ✅")
 
 
-def normalize_lists_strings(df, column_name, force_lowercase=True, remove_duplicate_elements=True, sort_elements=True):
+def normalize_lists_string_values(df, column_name, force_lowercase=True, remove_duplicate_elements=True, sort_elements=True):
     """
     Normalizes all string lists in a column by optionally forcing lowercase and removing duplicates.
     """
@@ -90,8 +113,8 @@ def normalize_lists_strings(df, column_name, force_lowercase=True, remove_duplic
     def normalize_cell(value):
         if isinstance(value, list):
             value_as_list = value
-        elif pd.isna(value):
-            return pd.NA
+        elif pd.isna(value) or value == "":
+            return []
         else:
             try:
                 value_as_list = ast.literal_eval(value)
@@ -291,22 +314,22 @@ def normalize_datetime_column(df, column_name):
 ####################################################################
 # Cleaning begins here
 ####################################################################
-
 df = pd.read_csv(r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\Step 1 - Processing\combined_df_step9.csv")
 
 ####################################################################
-# Assign and validate index
+# Index
 ####################################################################
 df.set_index("appid", inplace=True)  # Make "appid" the index
 df.sort_index(inplace=True)  # Sort by index
-print(f"Number of duplicates appids: {df.index.duplicated().sum()}")  # Ensure no duplicate index
+
+if df.index.duplicated().any():
+    raise ValueError("Duplicate appids found in the dataset. ❌")
 
 ####################################################################
-# Per column cleaning and validation
+# Per column special cleaning (exlcuding type enforcement)
 ####################################################################
 # achivements
 df.rename(columns={"achievements": "achievements_count"}, inplace=True)
-enforce_numerical_column(df, "achievements_count")
 
 
 # playtime columns (avg, median...)
@@ -314,69 +337,25 @@ df.rename(columns={"average_playtime_forever": "playtime_avg"}, inplace=True)
 df.rename(columns={"average_playtime_2weeks": "playtime_avg_2_weeks"}, inplace=True)
 df.rename(columns={"median_playtime_forever": "playtime_median"}, inplace=True)
 df.rename(columns={"median_playtime_2weeks": "playtime_median_2_weeks"}, inplace=True)
-enforce_numerical_column(df, "playtime_avg")
-enforce_numerical_column(df, "playtime_avg_2_weeks")
-enforce_numerical_column(df, "playtime_median")
-enforce_numerical_column(df, "playtime_median_2_weeks")
 
-# categories, ensure it's lists or nan
-validate_list_column(df, "categories")
-# DEbug, print head of categories
-normalize_lists_strings(df, "categories")
-
-# controller_support, ensure all values one of "none", "partial", "full", otherwise NaN for unknown
-df["controller_support"] = df["controller_support"].apply(lambda x: x if x in ["none", "partial", "full"] else np.nan)
-print("controller_support fully valid ✅")
-
-# developers, ensure it's lists or nan
-validate_list_column(df, "developers")
-normalize_lists_strings(df, "developers")
-
-# dlc_count, enforce numerical
-enforce_numerical_column(df, "dlc_count")
-
-# early_access, ensure all values are either "True", "False", or NaN
-enforce_boolean_column(df, "early_access")
-
-# estimated_owners, enforce numerical
-enforce_numerical_column(df, "estimated_owners")
 
 # languages stuff
 df.rename(columns={"supported_languages": "languages_supported"}, inplace=True)
 df.rename(columns={"full_audio_languages": "languages_with_full_audio"}, inplace=True)
-validate_list_column(df, "languages_supported")
-normalize_languages_column(df, "languages_supported")
-validate_list_column(df, "languages_with_full_audio")
-normalize_languages_column(df, "languages_with_full_audio")
 
-# Debug, print all unique values in "gamefaqs_difficulty_rating"
-print(df["gamefaqs_difficulty_rating"].unique())
-
-# gamefaqs_difficulty_rating already valid
-enforce_numerical_column(df, "gamefaqs_game_length")
-enforce_numerical_column(df, "gamefaqs_review_score")
-
-# genres, ensure it's lists or nan
-validate_list_column(df, "genres")
-normalize_lists_strings(df, "genres")
-
-enforce_boolean_column(df, "has_demos")
-enforce_boolean_column(df, "has_drm")
-
-# "Time to beat" stuff
-# gamefaqs_game_length
-# hltb_single
-# hltb_complete
-# igdb_complete
-# igdb_single
+# "Time to beat" stuff:
+#   - gamefaqs_game_length
+#   - hltb_single
+#   - hltb_complete
+#   - igdb_complete
+#   - igdb_single
 add_average_column(df, ["gamefaqs_game_length", "hltb_single", "hltb_complete", "igdb_complete", "igdb_single"], "average_time_to_beat")
 df.drop(columns=["gamefaqs_game_length", "hltb_single", "hltb_complete", "igdb_complete", "igdb_single"], inplace=True)
-enforce_numerical_column(df, "average_time_to_beat")
 
 # External review scores
-# gamefaqs_review_score (out of 5!)
-# igdb_review_score (out of 100)
-# metacritic_score (out of 100)
+#   - gamefaqs_review_score (out of 5!)
+#   - igdb_review_score (out of 100)
+#   - metacritic_score (out of 100)
 
 # Normalize each rating field to a 0-1 range
 df["gamefaqs_review_score"] /= 5
@@ -385,65 +364,30 @@ df["metacritic_score"] /= 100
 
 add_average_column(df, ["gamefaqs_review_score", "igdb_review_score", "metacritic_score"], "average_non_steam_review_score")
 df.drop(columns=["gamefaqs_review_score", "igdb_review_score", "metacritic_score"], inplace=True)
-enforce_numerical_column(df, "average_non_steam_review_score")
-
-enforce_boolean_column(df, "is_free")
 
 # platforms stuff
 df.rename(columns={"linux": "runs_on_linux"}, inplace=True)
 df.rename(columns={"mac": "runs_on_mac"}, inplace=True)
 df.rename(columns={"windows": "runs_on_windows"}, inplace=True)
-enforce_boolean_column(df, "runs_on_linux")
-enforce_boolean_column(df, "runs_on_mac")
-enforce_boolean_column(df, "runs_on_windows")
 
 # movies and screenshots
 df.rename(columns={"screenshots": "steam_store_screenshot_count"}, inplace=True)
-enforce_numerical_column(df, "steam_store_screenshot_count")
 df.rename(columns={"movies": "steam_store_movie_count"}, inplace=True)
-enforce_numerical_column(df, "steam_store_movie_count")
 
 # Steam reviews
 df.rename(columns={"negative": "steam_negative_reviews"}, inplace=True)
 df.rename(columns={"positive": "steam_positive_reviews"}, inplace=True)
-enforce_numerical_column(df, "steam_negative_reviews")
-enforce_numerical_column(df, "steam_positive_reviews")
 
-# peak_ccu
-enforce_numerical_column(df, "peak_ccu")
-
-
-# publishers
-validate_list_column(df, "publishers")
-normalize_lists_strings(df, "publishers")
-
-# recommendations
-enforce_numerical_column(df, "recommendations")
 
 # release_date stuff (we have YYYY-MM-DD format, "Feb 27, 2018" format, some with time (2020-04-05 00:00:00), and "Not Released", "coming_soon" and "unknown")...
 # First, extract "is_released" bool column from "release_date"
 df["is_released"] = df["release_date"].apply(lambda x: isinstance(x, str) and x.lower() not in ["not released", "coming soon"])
-enforce_datetime_column(df, "release_date")
-enforce_boolean_column(df, "is_released")
-
-enforce_numerical_column(df, "required_age")
 
 # steam_deck
 df.rename(columns={"steam_deck": "runs_on_steam_deck"}, inplace=True)
-enforce_boolean_column(df, "runs_on_steam_deck")
 
 # Drop columns too weak, irrelevant, or sparse
 df.drop(columns=["num_reviews_recent", "num_reviews_total", "pct_pos_recent", "pct_pos_total"], inplace=True)
-
-# steam_spy_estimated_owners
-enforce_numerical_column(df, "steam_spy_estimated_owners")
-
-# tags
-validate_list_column(df, "tags")
-normalize_lists_strings(df, "tags")
-
-enforce_boolean_column(df, "vr_only")
-enforce_boolean_column(df, "vr_supported")
 
 
 ####################################################################
@@ -471,31 +415,27 @@ columns_to_drop = [
 ]
 df.drop(columns=columns_to_drop, inplace=True)
 
-# Peak at the columns
-print(df.columns)
-
-# Peak at the first 10 "price_latest" and "price_original" values
-print(df[["price_latest", "price_original"]].head(10))
-
 # Turn all text (e.g. unlreleased) and empties into NaN
-enforce_numerical_column(df, "price_latest")
-enforce_numerical_column(df, "price_original")
+enforce_float_or_nan_column(df, "price_latest")
+enforce_float_or_nan_column(df, "price_original")
 
 
 #######
-# Fixing the broken tags manually
-# 'base building' -> 'base-building'
-# 'dystopian ' -> 'dystopian'
-# 'parody ' -> 'parody'
-# 'puzzle-platformer' -> 'puzzle platformer'
-# 'rogue-like' -> 'roguelike'
-# 'rogue-lite' -> 'roguelite'
+# Fixing the broken/duplicate tags manually
+#     'base building' -> 'base-building'
+#     'dystopian ' -> 'dystopian'
+#     'parody ' -> 'parody'
+#     'puzzle-platformer' -> 'puzzle platformer'
+#     'rogue-like' -> 'roguelike'
+#     'rogue-lite' -> 'roguelite'
 
 
 # Function to replace a specific string inside lists
 def replace_in_list(lst, before, after):
+    if isinstance(lst, str):
+        lst = ast.literal_eval(lst)
     if lst is None or not isinstance(lst, list) or lst == "":
-        return pd.NA
+        return []
     return [item.replace(before, after) if isinstance(item, str) else item for item in lst]
 
 
@@ -512,7 +452,74 @@ df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "rogue-lite", "ro
 # "Usability" columns to introduce
 ####################################################################
 # Introcud a "release_year" column from "release_date"
+enforce_datetime_column(df, "release_date")
 df["release_year"] = df["release_date"].dt.year
+
+
+####################################################################
+# Data Type Enforcement
+####################################################################
+# Print the list of all columns
+print("Enforcing column types...")
+column_type_mapprings = {
+    "achievements_count": enforce_int_or_nan_column,
+    "average_non_steam_review_score": enforce_float_or_nan_column,
+    "average_time_to_beat": enforce_float_or_nan_column,
+    "categories": normalize_lists_string_values,
+    "controller_support": enforce_boolean_or_nan_column,
+    "developers": normalize_lists_string_values,
+    "dlc_count": enforce_int_or_nan_column,
+    "early_access": enforce_boolean_or_nan_column,
+    "estimated_owners": enforce_int_or_nan_column,
+    "gamefaqs_difficulty_rating": enforce_string_or_nan_column,
+    "genres": normalize_lists_string_values,
+    "has_demos": enforce_boolean_or_nan_column,
+    "has_drm": enforce_boolean_or_nan_column,
+    "is_free": enforce_boolean_or_nan_column,
+    "is_released": enforce_boolean_or_nan_column,
+    "languages_supported": normalize_languages_column,
+    "languages_with_full_audio": normalize_languages_column,
+    "name": enforce_string_or_nan_column,
+    "peak_ccu": enforce_int_or_nan_column,
+    "playtime_avg": enforce_float_or_nan_column,
+    "playtime_avg_2_weeks": enforce_float_or_nan_column,
+    "playtime_median": enforce_float_or_nan_column,
+    "playtime_median_2_weeks": enforce_float_or_nan_column,
+    "price_latest": enforce_float_or_nan_column,
+    "price_original": enforce_float_or_nan_column,
+    "publishers": enforce_list_column,
+    "recommendations": enforce_int_or_nan_column,
+    "release_date": enforce_datetime_column,
+    "release_year": enforce_int_or_nan_column,
+    "required_age": enforce_int_or_nan_column,
+    "runs_on_linux": enforce_boolean_or_nan_column,
+    "runs_on_mac": enforce_boolean_or_nan_column,
+    "runs_on_steam_deck": enforce_boolean_or_nan_column,
+    "runs_on_windows": enforce_boolean_or_nan_column,
+    "steam_negative_reviews": enforce_int_or_nan_column,
+    "steam_positive_reviews": enforce_int_or_nan_column,
+    "steam_spy_estimated_owners": enforce_int_or_nan_column,
+    "steam_store_movie_count": enforce_int_or_nan_column,
+    "steam_store_screenshot_count": enforce_int_or_nan_column,
+    "tags": normalize_lists_string_values,
+    "vr_only": enforce_boolean_or_nan_column,
+    "vr_supported": enforce_boolean_or_nan_column,
+}
+
+
+# Get tall the columns of the dataset
+all_columns = df.columns.tolist()
+
+# For each column_type_mapprings, apply the function to the column and remove it from the list
+for column_name, func in column_type_mapprings.items():
+    if column_name in all_columns:
+        func(df, column_name)
+        all_columns.remove(column_name)
+
+# Raise error if there are any columns left
+if all_columns:
+    raise ValueError(f"Unhandled columns (are you missing mappings?): {all_columns}")
+
 
 ####################################################################
 # Finalize and save
@@ -522,5 +529,15 @@ df["release_year"] = df["release_date"].dt.year
 df = df.reindex(sorted(df.columns), axis=1)
 
 # Save results so far to a CSV file
-output_file = "combined_df_cleaned.csv"
-df.to_csv(output_file)
+output_filename = "combined_df_cleaned"
+df.to_csv(output_filename + ".csv", index=True)
+print(f"Saved cleaned DataFrame to {output_filename}.csv")
+
+# Save also to parquet
+df.to_parquet(output_filename + ".parquet")
+print(f"Saved cleaned DataFrame to {output_filename}.parquet")
+
+df.to_feather(output_filename + ".feather")
+print(f"Saved cleaned DataFrame to {output_filename}.feather")
+
+print("Cleaning complete ✅")
