@@ -30,7 +30,7 @@ df["genres"] = df["genres"].apply(safe_convert)
 
 st.set_page_config(
     page_title="Releases by Price",
-    page_icon="👋",
+    # page_icon="👋",
 )
 
 
@@ -48,10 +48,8 @@ st.markdown(
 
 
 # Add some content to see the styling
-st.title("Styled Streamlit App")
-
-# Debug, print the type of the genres column
-print(df["genres"].dtype)
+st.title("Game Releases by Price")
+st.write("This page allows you to explore the distribution of game releases by their launch price. You can filter by genre, tag, release year, and price range to see how the distribution changes.")
 
 st.sidebar.title("Filters")
 # Genre options with counts (sorted alphabetically)

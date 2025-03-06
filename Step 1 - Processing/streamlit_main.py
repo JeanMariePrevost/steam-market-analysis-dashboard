@@ -26,7 +26,6 @@ df = df.convert_dtypes()  # Convert columns to best possible types
 
 st.set_page_config(
     page_title="Home",
-    page_icon="👋",
 )
 
 
