@@ -1,4 +1,5 @@
 import ast
+from matplotlib.ticker import AutoMinorLocator
 from scipy.stats import gaussian_kde
 import matplotlib.pyplot as plt
 import numpy as np
@@ -67,12 +68,10 @@ tag_mapping = {f"{tag} ({tag_counts[tag]})": tag for tag in tag_counts.index}
 selected_tag_display = st.sidebar.selectbox("Select Tag", tag_options)
 selected_tag = tag_mapping.get(selected_tag_display, "All")  # Map back to actual value
 
-# Year options (sorted numerically)
-year_counts = df["release_year"].value_counts()
-year_options = ["All"] + [f"{year} ({year_counts[year]})" for year in sorted(year_counts.index)]  # Sort numerically
-year_mapping = {f"{year} ({year_counts[year]})": year for year in year_counts.index}
-selected_year_display = st.sidebar.selectbox("Select Release Year", year_options)
-selected_year = year_mapping.get(selected_year_display, "All")  # Map back to actual value
+# Year range slider
+min_year = int(df["release_year"].min())
+max_year = int(df["release_year"].max())
+selected_year_range = st.sidebar.slider("Select Release Year Range", min_year, max_year, (min_year, max_year))
 
 # Apply selected filters
 filtered_df = df.copy()
@@ -82,39 +81,45 @@ if selected_genre != "All":
 if selected_tag != "All":
     filtered_df = filtered_df[filtered_df["tags"].apply(lambda x: selected_tag in x)]
 
-if selected_year != "All":
-    filtered_df = filtered_df[filtered_df["release_year"] == int(selected_year)]
+filtered_df = filtered_df[(filtered_df["release_year"] >= selected_year_range[0]) & (filtered_df["release_year"] <= selected_year_range[1])]
 
-# Remove price outliers using IQR
-# Q1 = filtered_df["price_original"].quantile(0.25)
-# Q3 = filtered_df["price_original"].quantile(0.75)
-# IQR = Q3 - Q1
-# lower_bound = Q1 - 1.5 * IQR
-# upper_bound = Q3 + 1.5 * IQR
-lower_bound = 0
-# upper_bound = filtered_df["price_original"].quantile(0.95)
-upper_bound = 100
-filtered_df = filtered_df[(filtered_df["price_original"] >= lower_bound) & (filtered_df["price_original"] <= upper_bound)]
+
+st.sidebar.title("Options")
+# Add a "bins" slider to the sidebar
+num_bins = st.sidebar.slider("Select Number of Bins", 5, 50, 20)
+
+# Add a "price range" min max input to the sidebar
+price_range = st.sidebar.slider("Select Price Range", 0, 120, (0, 100))
+
+
+filtered_df = filtered_df[(filtered_df["price_original"] >= price_range[0]) & (filtered_df["price_original"] <= price_range[1])]
 
 
 # Plot Histogram + Scaled KDE with Log Y-Axis
 st.write("### Price Distribution of Games")
 genre_string = selected_genre_display.split(" (")[0] if selected_genre != "All" else "All"
 tag_string = selected_tag_display.split(" (")[0] if selected_tag != "All" else "All"
-year_string = selected_year_display.split(" (")[0] if selected_year != "All" else "All"
+year_string = f"{selected_year_range[0]} - {selected_year_range[1]}"
 st.write(f"Filtered by Genre: _{genre_string}_, Tag: _{tag_string}_, Year: _{year_string}_")
 st.write(f"({len(filtered_df)} items)")
+
+# Halt if no data
+if filtered_df.empty:
+    st.warning("No data available for the selected filters. Please adjust the filters.")
+    st.stop()
 
 # fig, ax = plt.subplots(figsize=(12, 6), dpi=200)  # Larger figure for better scaling
 fig, ax = plt.subplots(figsize=(12, 6))
 
 # Histogram (bars)
-hist_values, bin_edges, _ = ax.hist(filtered_df["price_original"], bins=20, alpha=0.6, color="blue", edgecolor="black")
+hist_values, bin_edges, _ = ax.hist(filtered_df["price_original"], bins=num_bins, alpha=0.6, color="blue", edgecolor="black")
 
 # KDE Plot (Scaled to Histogram)
-if len(filtered_df) > 1:
+if len(filtered_df["price_original"]) < 2 or np.var(filtered_df["price_original"]) == 0:
+    st.warning("Insufficient data variance for KDE computation.")
+else:
     kde = gaussian_kde(filtered_df["price_original"])
-    x_range = np.linspace(min(filtered_df["price_original"]), max(filtered_df["price_original"]), 200)  # More points for smoother KDE
+    x_range = np.linspace(min(filtered_df["price_original"]), max(filtered_df["price_original"]), max((price_range[1] - price_range[0]), 10))  # More points for smoother KDE
 
     # Scale KDE to match histogram counts
     bin_width = bin_edges[1] - bin_edges[0]  # Width of each histogram bin
@@ -123,10 +128,13 @@ if len(filtered_df) > 1:
     ax.plot(x_range, kde_scaled, color="red", linewidth=2, label="KDE (Scaled)")
 
 
-# Increase the number of X-axis ticks dynamically
-num_ticks = 20  # Adjust the number of ticks
-ax.set_xticks(np.arange(0, 110, 10))  # Fixed ticks from 0 to 100 (step = 10)
-ax.set_xticklabels([f"${int(tick)}" for tick in np.arange(0, 110, 10)])  # Format labels as prices
+# X axis ticks
+num_ticks = 11
+tick_step = (price_range[1] - price_range[0]) / (num_ticks - 1)  # Step size for ticks
+ticks = np.arange(price_range[0], price_range[1] + tick_step, tick_step)  # Generate ticks
+ax.set_xticks(ticks)  # Set dynamic ticks
+ax.set_xticklabels([f"${int(tick)}" for tick in ticks])  # Format labels as prices
+ax.xaxis.set_minor_locator(AutoMinorLocator(2))
 
 
 ax.set_xlabel("Price ($)")
