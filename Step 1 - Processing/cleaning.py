@@ -60,14 +60,14 @@ def enforce_datetime_column(df, column_name):
     print(f"{column_name} fully datetime ✅")
 
 
-def validate_list_or_nan_column(df, column_name):
+def validate_list_column(df, column_name):
     """
     Ensures every cell of a column is a list<string> or NaN
     """
 
     def validate_and_fix(value):
-        if pd.isna(value):  # Allow NaN values
-            return value
+        if pd.isna(value) or value == "":  # Correctly type empty lists
+            return []
         else:
             try:
                 parsed_value = ast.literal_eval(value)  # Convert stringified lists
@@ -232,8 +232,8 @@ def normalize_languages_column(df, column_name):
     def normalize_cell(value):
         if isinstance(value, list):
             languages_list = value
-        elif pd.isna(value):
-            return pd.NA
+        elif pd.isna(value) or value == "":
+            return []
         else:
             try:
                 languages_list = ast.literal_eval(value)
@@ -255,10 +255,6 @@ def normalize_languages_column(df, column_name):
                     if allowed_lang in element.lower():
                         normalized_languages.append(allowed_lang)  # Replace what "looks like" the language with the correct one
                         break
-
-        # Empty lists should be NA
-        if not normalized_languages or len(normalized_languages) == 0:
-            return pd.NA
 
         # Remove duplicates
         normalized_languages = list(set(normalized_languages))
@@ -324,7 +320,7 @@ enforce_numerical_column(df, "playtime_median")
 enforce_numerical_column(df, "playtime_median_2_weeks")
 
 # categories, ensure it's lists or nan
-validate_list_or_nan_column(df, "categories")
+validate_list_column(df, "categories")
 # DEbug, print head of categories
 normalize_lists_strings(df, "categories")
 
@@ -333,7 +329,7 @@ df["controller_support"] = df["controller_support"].apply(lambda x: x if x in ["
 print("controller_support fully valid ✅")
 
 # developers, ensure it's lists or nan
-validate_list_or_nan_column(df, "developers")
+validate_list_column(df, "developers")
 normalize_lists_strings(df, "developers")
 
 # dlc_count, enforce numerical
@@ -348,9 +344,9 @@ enforce_numerical_column(df, "estimated_owners")
 # languages stuff
 df.rename(columns={"supported_languages": "languages_supported"}, inplace=True)
 df.rename(columns={"full_audio_languages": "languages_with_full_audio"}, inplace=True)
-validate_list_or_nan_column(df, "languages_supported")
+validate_list_column(df, "languages_supported")
 normalize_languages_column(df, "languages_supported")
-validate_list_or_nan_column(df, "languages_with_full_audio")
+validate_list_column(df, "languages_with_full_audio")
 normalize_languages_column(df, "languages_with_full_audio")
 
 # Debug, print all unique values in "gamefaqs_difficulty_rating"
@@ -361,7 +357,7 @@ enforce_numerical_column(df, "gamefaqs_game_length")
 enforce_numerical_column(df, "gamefaqs_review_score")
 
 # genres, ensure it's lists or nan
-validate_list_or_nan_column(df, "genres")
+validate_list_column(df, "genres")
 normalize_lists_strings(df, "genres")
 
 enforce_boolean_column(df, "has_demos")
@@ -418,7 +414,7 @@ enforce_numerical_column(df, "peak_ccu")
 
 
 # publishers
-validate_list_or_nan_column(df, "publishers")
+validate_list_column(df, "publishers")
 normalize_lists_strings(df, "publishers")
 
 # recommendations
@@ -443,7 +439,7 @@ df.drop(columns=["num_reviews_recent", "num_reviews_total", "pct_pos_recent", "p
 enforce_numerical_column(df, "steam_spy_estimated_owners")
 
 # tags
-validate_list_or_nan_column(df, "tags")
+validate_list_column(df, "tags")
 normalize_lists_strings(df, "tags")
 
 enforce_boolean_column(df, "vr_only")
@@ -485,6 +481,38 @@ print(df[["price_latest", "price_original"]].head(10))
 enforce_numerical_column(df, "price_latest")
 enforce_numerical_column(df, "price_original")
 
+
+#######
+# Fixing the broken tags manually
+# 'base building' -> 'base-building'
+# 'dystopian ' -> 'dystopian'
+# 'parody ' -> 'parody'
+# 'puzzle-platformer' -> 'puzzle platformer'
+# 'rogue-like' -> 'roguelike'
+# 'rogue-lite' -> 'roguelite'
+
+
+# Function to replace a specific string inside lists
+def replace_in_list(lst, before, after):
+    if lst is None or not isinstance(lst, list) or lst == "":
+        return pd.NA
+    return [item.replace(before, after) if isinstance(item, str) else item for item in lst]
+
+
+# Apply the function with "rogue-like" -> "roguelike"
+df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "base building", "base-building"))
+df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "dystopian ", "dystopian"))
+df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "parody ", "parody"))
+df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "puzzle-platformer", "puzzle platformer"))
+df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "rogue-like", "roguelike"))
+df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "rogue-lite", "roguelite"))
+
+
+####################################################################
+# "Usability" columns to introduce
+####################################################################
+# Introcud a "release_year" column from "release_date"
+df["release_year"] = df["release_date"].dt.year
 
 ####################################################################
 # Finalize and save

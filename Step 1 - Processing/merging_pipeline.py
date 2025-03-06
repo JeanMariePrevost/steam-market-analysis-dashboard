@@ -21,6 +21,9 @@ set8_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\dat
 set9_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\vicentearce_steamdata\final\steam_games.csv"  # Coop, online, workshop support, languages, precise rating, playtime, peak player, owners, has dlc, has demos....
 set10_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\souyama_steam-dataset\steam_dataset\steamspy\detailed\steam_spy_detailed.json"  # Owners, CCU, detailled tags
 set11_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\souyama_steam-dataset\steam_dataset\appinfo\store_data\steam_store_data.json"  # F2P, required age, what is price_overview?, whether games have demos...
+set12_path = (
+    r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\kasumil5x_howlongtobeat-games-completion-times\games.csv"  # Acually good time to complete, but have to merge on name...
+)
 
 # To consider: antonkozyriev_game-recommendations-on-steam	games_metadata.json for its long tags list (unweighted)
 
@@ -574,3 +577,33 @@ print("NOTE: Skipping set 10 processing due to difficulties in properly formatti
 print("Processing set 11...")
 print("NOTE: Skipping set 11 processing due to difficulties in properly formatting the JSON data into compatible tabular data.")
 # NOTE: Currently skipped due to difficulties in properly formatting the JSON _nested_ data structures into compatible tabular data.
+
+
+# ===================================================================================================
+# ===================================================================================================
+# Set 12 processing (HLTB times, by full game name, which makes us lose a bunch of them...)
+# ===================================================================================================
+# ===================================================================================================
+
+df_set12 = pd.read_csv(set12_path)
+
+# Keep only title, main_story, main_plus_extras, completionist
+df_set12 = df_set12[["title", "main_story", "main_plus_extras", "completionist"]]
+
+# Prefix all columns with "hltb_" to avoid conflicts
+df_set12.columns = [f"hltb_{col}" for col in df_set12.columns]
+
+# # Merge df_merged  ("left" join)  with df_hltb on game title/name
+combined_df = combined_df.merge(df_set12, left_on="name", right_on="hltb_title", how="left")
+
+# # Drop the "title" column
+combined_df.drop(columns=["hltb_title"], inplace=True)
+
+# Save the processed dataset
+df_set12.to_csv("set9_processed.csv", index=False)
+
+# DEBUG - Save the combined DataFrame to a CSV file
+combined_df.to_csv("combined_df_step12.csv", index=False)
+
+
+# HERE -  Try it, should be fine now AFAIK
