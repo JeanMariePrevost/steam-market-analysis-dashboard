@@ -426,8 +426,14 @@ df.drop(columns=columns_to_drop, inplace=True)
 # Fix invalid pricing info and introduce "is_f2p" for the "free to play" tag / genre
 normalize_lists_string_values(df, "genres")
 normalize_lists_string_values(df, "tags")
+df["is_f2p"] = False
 df.loc[df["genres"].apply(lambda x: "free to play" in x), "is_f2p"] = True
 df.loc[df["tags"].apply(lambda x: "free to play" in x), "is_f2p"] = True
+# Set "is_free" to False for games that don't have any "free to play" tage/genre _and_ that have both a price_original and a price_latest > 0, which are extremely unlikely to actually be free
+enforce_float_or_nan_column(df, "price_original")
+enforce_float_or_nan_column(df, "price_latest")
+df.loc[(df["is_f2p"] == False) & (df["price_original"] > 0) & (df["price_latest"] > 0), "is_free"] = False
+
 # set F2P to false for games where is_free is True, to differentiate between "free" and "free to play", which the tags don't do
 df.loc[df["is_free"] == True, "is_f2p"] = False
 enforce_boolean_or_nan_column(df, "is_free")
@@ -551,7 +557,7 @@ df["years_since_release"] = most_recent_year - df["release_year"]
 df["dislike_ratio"] = (df["steam_negative_reviews"] / df["steam_total_reviews"]).pow(2)  # Makes the dislike ratio less impactful near the positive end
 df["discount_factor"] = 0.5 * np.exp(-df["dislike_ratio"] * df["years_since_release"]) + 0.3
 
-
+####################################################################
 # Calculate the estimated gross revenue using the Boxleiter method
 df.loc[(df["price_original"] > 0) & ~df["tags"].str.contains("free to play", na=False) & ~df["genres"].str.contains("free to play", na=False), "estimated_gross_revenue_boxleiter"] = (
     (df["estimated_owners_boxleiter"] * df["price_original"] * df["discount_factor"]).round().astype("Int64")
