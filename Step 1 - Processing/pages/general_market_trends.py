@@ -8,19 +8,7 @@ import matplotlib.ticker as mticker
 
 # Load Data
 df = pd.read_parquet(r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\Step 1 - Processing\combined_df_cleaned.parquet")
-df = df.convert_dtypes()
-
-
-# Convert string representations of lists to actual lists for 'genres' and 'tags'
-def safe_convert(val):
-    try:
-        return ast.literal_eval(val) if isinstance(val, str) else val
-    except:
-        return []
-
-
-df["genres"] = df["genres"].apply(safe_convert)
-df["tags"] = df["tags"].apply(safe_convert)
+# df = df.convert_dtypes()
 
 # Page configuration & custom CSS
 st.set_page_config(page_title="Overview of Releases & Trends")
