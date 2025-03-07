@@ -17,3 +17,5 @@ Step 1 - Processing/combined_df_cleaned.json
 Step 1 - Processing/combined_df_cleaned_with_hltb.csv
 Step 1 - Processing/combined_df_cleaned.csv
 Step 1 - Processing/combined_df_cleaned_with_owners.csv
+*.rar
+Step 1 - Processing/combined_df_cleaned.parquet

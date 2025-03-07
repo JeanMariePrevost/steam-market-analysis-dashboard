@@ -32,7 +32,10 @@ def enforce_boolean_or_nan_column(df, column_name):
     """Enforces a column as boolean, squashing all non-boolean values to NaN."""
     if column_name not in df.columns:
         raise KeyError(f"Column '{column_name}' does not exist in the DataFrame.")
-    df[column_name] = df[column_name].apply(lambda x: x if x in [True, False] else np.nan).astype("boolean")
+
+    # Replace non-boolean values with pd.NA
+    df[column_name] = df[column_name].apply(lambda x: x if isinstance(x, bool) else pd.NA).astype("boolean")  # Convert to nullable boolean dtype
+
     print(f"{column_name} fully boolean ✅")
 
 
@@ -91,21 +94,23 @@ def enforce_list_column(df, column_name):
     Ensures every cell of a column is a list<string> or [], squashing all invalid values to [].
     """
 
-    def validate_and_fix(value):
-        if pd.isna(value) or value == "":  # Correctly type empty lists
-            return []
-        else:
-            try:
-                parsed_value = ast.literal_eval(value)  # Convert stringified lists
-                if isinstance(parsed_value, list) and all(isinstance(i, str) for i in parsed_value):
-                    return parsed_value  # Successfully converted valid list
-            except (ValueError, SyntaxError):
-                raise TypeError(f"Invalid value in {column_name}: {repr(value)} (type: {type(value).__name__})")
+    # def enforce_type_as_list(value):
+    #     if isinstance(value, list) and all(isinstance(i, str) for i in value):
+    #         return value
+    #     elif pd.isna(value) or value == "":  # Correctly type empty lists
+    #         return []
+    #     else:
+    #         try:
+    #             parsed_value = ast.literal_eval(value)  # Convert stringified lists
+    #             if isinstance(parsed_value, list) and all(isinstance(i, str) for i in parsed_value):
+    #                 return parsed_value  # Successfully converted valid list
+    #         except (ValueError, SyntaxError):
+    #             raise TypeError(f"Invalid value in {column_name}: {repr(value)} (type: {type(value).__name__})")
 
-    # Apply the function to enforce correctness
-    df[column_name] = df[column_name].apply(validate_and_fix)
+    # # Apply the function to enforce correctness
+    # df[column_name] = df[column_name].apply(enforce_type_as_list)
 
-    print(f"{column_name} fully list<string> ✅")
+    # print(f"{column_name} fully list<string> ✅")
 
 
 def normalize_lists_string_values(df, column_name, force_lowercase=True, remove_duplicate_elements=True, sort_elements=True):
@@ -125,7 +130,6 @@ def normalize_lists_string_values(df, column_name, force_lowercase=True, remove_
                     raise ValueError(f"Value is not a list: {repr(value)}")
                 if not all(isinstance(x, str) for x in value_as_list):
                     raise ValueError(f"List contains non-string elements: {repr(value)}")
-                return value_as_list
             except:
                 raise ValueError(f"Invalid entry: {repr(value)}")
 
@@ -418,12 +422,28 @@ columns_to_drop = [
 ]
 df.drop(columns=columns_to_drop, inplace=True)
 
+
+# Fix invalid pricing info and introduce "is_f2p" for the "free to play" tag / genre
+normalize_lists_string_values(df, "genres")
+normalize_lists_string_values(df, "tags")
+df.loc[df["genres"].apply(lambda x: "free to play" in x), "is_f2p"] = True
+df.loc[df["tags"].apply(lambda x: "free to play" in x), "is_f2p"] = True
+# set F2P to false for games where is_free is True, to differentiate between "free" and "free to play", which the tags don't do
+df.loc[df["is_free"] == True, "is_f2p"] = False
+enforce_boolean_or_nan_column(df, "is_free")
+enforce_boolean_or_nan_column(df, "is_f2p")
+
+
+# Fix all " that aren't aligned with the "is_free" tag
+df.loc[df["is_f2p"], "price_latest"] = 0.0
+df.loc[df["is_f2p"], "price_original"] = 0.0
+
 # Turn all text (e.g. unlreleased) and empties into NaN
 enforce_float_or_nan_column(df, "price_latest")
 enforce_float_or_nan_column(df, "price_original")
 
 
-#######
+####################################################################
 # Fixing the broken/duplicate tags manually
 #     'base building' -> 'base-building'
 #     'dystopian ' -> 'dystopian'
@@ -488,9 +508,16 @@ df.loc[df["release_year"] > 2020, "temp_review_inflation_factor"] = 31 / 80
 
 boxleiter_number = 80  # Boxleiter's Method "owner per review" multipler
 
-df["estimated_owners_boxleiter"] = (df["steam_total_reviews"] * boxleiter_number * df["temp_scale_factor"] * df["temp_review_inflation_factor"]).round().astype("Int64")
+# User Commitment Bias : Expensive games get more reviews per owner, F2P games get the least
+# Closest match was roughly `3 + 2 * np.exp(-0.2 * price) -2`, where F2P games get nearly 3 _TIMES_ fewer reviews per player (see marvel Rivals, TF2, etc), and the effect vanishing around $30
+df["temp_commitment_bias_mult"] = df["price_original"].apply(lambda x: 3 + 2 * np.exp(-0.2 * x) - 2)
 
-# Remove esitmates where the total reviews are too low
+
+df["estimated_owners_boxleiter"] = (
+    (df["steam_total_reviews"] * boxleiter_number * df["temp_scale_factor"] * df["temp_review_inflation_factor"] * df["temp_commitment_bias_mult"]).round().astype("Int64")
+)
+
+# Remove esitmates for rows where the total reviews are too low
 df.loc[df["steam_total_reviews"] < minimum_total_reviews, "estimated_owners_boxleiter"] = np.nan
 
 # Drop the temporary columns
@@ -511,10 +538,14 @@ df["dislike_ratio"] = (df["steam_negative_reviews"] / df["steam_total_reviews"])
 df["discount_factor"] = 0.5 * np.exp(-df["dislike_ratio"] * df["years_since_release"]) + 0.3
 
 
-# Start with 100% sales by default
+# Calculate the estimated gross revenue using the Boxleiter method
 df.loc[(df["price_original"] > 0) & ~df["tags"].str.contains("free to play", na=False) & ~df["genres"].str.contains("free to play", na=False), "estimated_gross_revenue_boxleiter"] = (
     (df["estimated_owners_boxleiter"] * df["price_original"] * df["discount_factor"]).round().astype("Int64")
 )
+
+# Do the same with a _very_ conservative LTV / ARPU for free to play games, but the monetization strategies would play a _massive_ part here
+concservative_arpu = 0.25  # dollars per player per lifetime
+df.loc[df["is_f2p"], "estimated_gross_revenue_boxleiter"] = (df["estimated_owners_boxleiter"] * concservative_arpu * df["discount_factor"]).round().astype("Int64")
 
 # Drop the temporary columns
 df.drop(columns=["years_since_release", "dislike_ratio", "discount_factor"], inplace=True)
