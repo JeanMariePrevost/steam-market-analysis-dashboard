@@ -561,10 +561,10 @@ df["discount_factor"] = 0.5 * np.exp(-df["dislike_ratio"] * df["years_since_rele
 # Calculate the estimated gross revenue using the Boxleiter method
 df.loc[df["monetization_model"] == "paid", "estimated_gross_revenue_boxleiter"] = (df["estimated_owners_boxleiter"] * df["price_original"] * df["discount_factor"]).round().astype("Int64")
 
-# Do the same with a _very_ conservative LTV / ARPU for free to play games, but the monetization strategies would play a _massive_ part here
-concservative_arpu = 0.25  # dollars per player per lifetime
-df.loc[df["monetization_model"] == "f2p", "estimated_gross_revenue_boxleiter"] = (df["estimated_owners_boxleiter"] * concservative_arpu * df["discount_factor"]).round().astype("Int64")
+# Do the same with a very conservative LTV / ARPU for free to play games, but the monetization strategies would play a _massive_ part here
+estimated_ltarpu = 0.5  # $0.5
 
+df.loc[df["monetization_model"] == "f2p", "estimated_gross_revenue_boxleiter"] = (df["estimated_owners_boxleiter"] * estimated_ltarpu * df["discount_factor"]).round().astype("Int64")
 
 df.loc[df["monetization_model"] == "free", "estimated_gross_revenue_boxleiter"] = 0
 
