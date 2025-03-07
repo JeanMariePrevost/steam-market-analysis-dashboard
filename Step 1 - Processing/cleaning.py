@@ -1,3 +1,4 @@
+import datetime
 import json
 import random
 import pandas as pd
@@ -492,9 +493,31 @@ df["estimated_owners_boxleiter"] = (df["steam_total_reviews"] * boxleiter_number
 # Remove esitmates where the total reviews are too low
 df.loc[df["steam_total_reviews"] < minimum_total_reviews, "estimated_owners_boxleiter"] = np.nan
 
-
+# Drop the temporary columns
 df.drop(columns=["temp_scale_factor", "temp_review_inflation_factor"], inplace=True)
 
+# Add Boxleiter based conservative revenue estimates
+# Implements heuristics described in the Boxleiter method's modifications in regards to game reviews and age influencing the degree of discount applied
+
+# First, calculate an "average sale discount" based on age (from current year) and negative review ratio
+most_recent_year = df["release_year"].max()
+df["years_since_release"] = most_recent_year - df["release_year"]
+
+# Use `0.5 * np.exp(-b * years_since_release) + 0.3` as the discount factor
+# where b is a the dislike ratio, that determines how quickly the discount decreases with age, from 80% (typical launch discount) down to a semi-arbitrary 30% average discount
+# This was validated against "known" game revenues as shared or public (Stardew Valley, Cyberpunk 2077, Withcer 3 Wild Hunt...), and found to surprisingly accurate
+# The dislike ratio is calculated as the ratio of negative reviews to total reviews
+df["dislike_ratio"] = (df["steam_negative_reviews"] / df["steam_total_reviews"]).pow(2)  # Makes the dislike ratio less impactful near the positive end
+df["discount_factor"] = 0.5 * np.exp(-df["dislike_ratio"] * df["years_since_release"]) + 0.3
+
+
+# Start with 100% sales by default
+df.loc[(df["price_original"] > 0) & ~df["tags"].str.contains("free to play", na=False) & ~df["genres"].str.contains("free to play", na=False), "estimated_gross_revenue_boxleiter"] = (
+    (df["estimated_owners_boxleiter"] * df["price_original"] * df["discount_factor"]).round().astype("Int64")
+)
+
+# Drop the temporary columns
+df.drop(columns=["years_since_release", "dislike_ratio", "discount_factor"], inplace=True)
 
 ####################################################################
 # Data Type Enforcement
@@ -511,6 +534,7 @@ column_type_mapprings = {
     "dlc_count": enforce_int_or_nan_column,
     "early_access": enforce_boolean_or_nan_column,
     "estimated_owners_boxleiter": enforce_int_or_nan_column,
+    "estimated_gross_revenue_boxleiter": enforce_int_or_nan_column,
     "gamefaqs_difficulty_rating": enforce_string_or_nan_column,
     "genres": normalize_lists_string_values,
     "has_demos": enforce_boolean_or_nan_column,
