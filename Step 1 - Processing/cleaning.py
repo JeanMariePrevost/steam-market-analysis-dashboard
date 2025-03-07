@@ -21,7 +21,9 @@ def enforce_int_or_nan_column(df, column_name, verbose=True):
     """Enforces a column as integers, squashing all non-numeric values to NaN. Any floats will also be converted to integers (truncated)."""
     if column_name not in df.columns:
         raise KeyError(f"Column '{column_name}' does not exist in the DataFrame.")
-    df[column_name] = pd.to_numeric(df[column_name], errors="coerce").astype("Int64")
+    df[column_name] = pd.to_numeric(df[column_name], errors="coerce").astype(
+        "Int64",
+    )
     print(f"{column_name} fully numerical (integers) ✅")
 
 
@@ -449,11 +451,49 @@ df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "rogue-lite", "ro
 
 
 ####################################################################
-# "Usability" columns to introduce
+# "Usability/qol" columns to introduce
 ####################################################################
 # Introcud a "release_year" column from "release_date"
 enforce_datetime_column(df, "release_date")
 df["release_year"] = df["release_date"].dt.year
+
+df["steam_total_reviews"] = df["steam_negative_reviews"] + df["steam_positive_reviews"]
+
+####################################################################
+# Inferred or imputed columns to introduce
+####################################################################
+# Estimated owners were positively useless and rather sparse. Even review numbers often made them technically impossible.
+# I've decided to rely on the conservative Boxleiter method
+
+minimum_total_reviews = 25  # Minimum total reviews to consider the estimate
+
+df.drop(columns=["estimated_owners"], inplace=True)
+df.drop(columns=["steam_spy_estimated_owners"], inplace=True)
+
+# temp_scale_factor = 1, or 0.75 if steam_negative_reviews + steam_positive_reviews > 100000
+df["temp_scale_factor"] = 1  # Default to 1
+df.loc[df["steam_total_reviews"] > 100000, "temp_scale_factor"] = 0.75
+
+
+df["temp_review_inflation_factor"] = 1.0
+df.loc[df["release_year"] == 2013, "temp_review_inflation_factor"] = 79 / 80
+df.loc[df["release_year"] == 2014, "temp_review_inflation_factor"] = 72 / 80
+df.loc[df["release_year"] == 2015, "temp_review_inflation_factor"] = 62 / 80
+df.loc[df["release_year"] == 2016, "temp_review_inflation_factor"] = 52 / 80
+df.loc[df["release_year"] == 2017, "temp_review_inflation_factor"] = 43 / 80
+df.loc[df["release_year"] == 2018, "temp_review_inflation_factor"] = 38 / 80
+df.loc[df["release_year"] == 2019, "temp_review_inflation_factor"] = 36 / 80
+df.loc[df["release_year"] > 2020, "temp_review_inflation_factor"] = 31 / 80
+
+boxleiter_number = 80  # Boxleiter's Method "owner per review" multipler
+
+df["estimated_owners_boxleiter"] = (df["steam_total_reviews"] * boxleiter_number * df["temp_scale_factor"] * df["temp_review_inflation_factor"]).round().astype("Int64")
+
+# Remove esitmates where the total reviews are too low
+df.loc[df["steam_total_reviews"] < minimum_total_reviews, "estimated_owners_boxleiter"] = np.nan
+
+
+df.drop(columns=["temp_scale_factor", "temp_review_inflation_factor"], inplace=True)
 
 
 ####################################################################
@@ -470,7 +510,7 @@ column_type_mapprings = {
     "developers": normalize_lists_string_values,
     "dlc_count": enforce_int_or_nan_column,
     "early_access": enforce_boolean_or_nan_column,
-    "estimated_owners": enforce_int_or_nan_column,
+    "estimated_owners_boxleiter": enforce_int_or_nan_column,
     "gamefaqs_difficulty_rating": enforce_string_or_nan_column,
     "genres": normalize_lists_string_values,
     "has_demos": enforce_boolean_or_nan_column,
@@ -498,7 +538,7 @@ column_type_mapprings = {
     "runs_on_windows": enforce_boolean_or_nan_column,
     "steam_negative_reviews": enforce_int_or_nan_column,
     "steam_positive_reviews": enforce_int_or_nan_column,
-    "steam_spy_estimated_owners": enforce_int_or_nan_column,
+    "steam_total_reviews": enforce_int_or_nan_column,
     "steam_store_movie_count": enforce_int_or_nan_column,
     "steam_store_screenshot_count": enforce_int_or_nan_column,
     "tags": normalize_lists_string_values,
@@ -515,10 +555,13 @@ for column_name, func in column_type_mapprings.items():
     if column_name in all_columns:
         func(df, column_name)
         all_columns.remove(column_name)
+    else:
+        print(f"❌ Column '{column_name}' not found in the dataset.")
 
 # Raise error if there are any columns left
 if all_columns:
-    raise ValueError(f"Unhandled columns (are you missing mappings?): {all_columns}")
+    # raise ValueError(f"Unhandled columns (are you missing mappings?): {all_columns}")
+    print(f"❌ Unhandled columns (are you missing mappings?): {all_columns}")
 
 
 ####################################################################
