@@ -480,6 +480,20 @@ df["release_year"] = df["release_date"].dt.year
 
 df["steam_total_reviews"] = df["steam_negative_reviews"] + df["steam_positive_reviews"]
 
+df["steam_positive_review_ratio"] = df["steam_positive_reviews"] / df["steam_total_reviews"]
+
+# Add a "monetization_model" column (free, f2p, paid) to replace the "is_free" and "is_f2p" columns
+# Set it to "paid" where the game has a price >0
+df.loc[df["price_original"] > 0, "monetization_model"] = "paid"
+df.loc[df["price_latest"] > 0, "monetization_model"] = "paid"
+# Set it to "free" where is_free
+df.loc[df["is_free"] == True, "monetization_model"] = "free"
+# Set it to "f2p" where is_f2p
+df.loc[df["is_f2p"] == True, "monetization_model"] = "f2p"
+
+# Drop the old "is_free" and "is_f2p" columns
+df.drop(columns=["is_free", "is_f2p"], inplace=True)
+
 ####################################################################
 # Inferred or imputed columns to introduce
 ####################################################################
@@ -521,7 +535,7 @@ df["estimated_owners_boxleiter"] = (
 df.loc[df["steam_total_reviews"] < minimum_total_reviews, "estimated_owners_boxleiter"] = np.nan
 
 # Drop the temporary columns
-df.drop(columns=["temp_scale_factor", "temp_review_inflation_factor"], inplace=True)
+df.drop(columns=["temp_scale_factor", "temp_review_inflation_factor", "temp_commitment_bias_mult"], inplace=True)
 
 # Add Boxleiter based conservative revenue estimates
 # Implements heuristics described in the Boxleiter method's modifications in regards to game reviews and age influencing the degree of discount applied
@@ -545,7 +559,7 @@ df.loc[(df["price_original"] > 0) & ~df["tags"].str.contains("free to play", na=
 
 # Do the same with a _very_ conservative LTV / ARPU for free to play games, but the monetization strategies would play a _massive_ part here
 concservative_arpu = 0.25  # dollars per player per lifetime
-df.loc[df["is_f2p"], "estimated_gross_revenue_boxleiter"] = (df["estimated_owners_boxleiter"] * concservative_arpu * df["discount_factor"]).round().astype("Int64")
+df.loc[df["monetization_model"] == "f2p", "estimated_gross_revenue_boxleiter"] = (df["estimated_owners_boxleiter"] * concservative_arpu * df["discount_factor"]).round().astype("Int64")
 
 # Drop the temporary columns
 df.drop(columns=["years_since_release", "dislike_ratio", "discount_factor"], inplace=True)
@@ -570,10 +584,10 @@ column_type_mapprings = {
     "genres": normalize_lists_string_values,
     "has_demos": enforce_boolean_or_nan_column,
     "has_drm": enforce_boolean_or_nan_column,
-    "is_free": enforce_boolean_or_nan_column,
     "is_released": enforce_boolean_or_nan_column,
     "languages_supported": normalize_languages_column,
     "languages_with_full_audio": normalize_languages_column,
+    "monetization_model": enforce_string_or_nan_column,
     "name": enforce_string_or_nan_column,
     "peak_ccu": enforce_int_or_nan_column,
     "playtime_avg": enforce_float_or_nan_column,
@@ -593,6 +607,7 @@ column_type_mapprings = {
     "runs_on_windows": enforce_boolean_or_nan_column,
     "steam_negative_reviews": enforce_int_or_nan_column,
     "steam_positive_reviews": enforce_int_or_nan_column,
+    "steam_positive_review_ratio": enforce_float_or_nan_column,
     "steam_total_reviews": enforce_int_or_nan_column,
     "steam_store_movie_count": enforce_int_or_nan_column,
     "steam_store_screenshot_count": enforce_int_or_nan_column,
