@@ -4,6 +4,7 @@ from matplotlib.ticker import AutoMinorLocator
 import numpy as np
 import pandas as pd
 import streamlit as st
+import matplotlib.ticker as mticker
 
 # Load Data
 df = pd.read_parquet(r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\Step 1 - Processing\combined_df_cleaned.parquet")
@@ -65,7 +66,9 @@ ax1.plot(release_counts["release_year"], release_counts["count"], marker="o", li
 ax1.set_xlabel("Release Year")
 ax1.set_ylabel("Number of Releases")
 ax1.set_title("Total Game Releases per Year")
-ax1.xaxis.set_minor_locator(AutoMinorLocator())
+ax1.xaxis.set_minor_locator(AutoMinorLocator(2))
+ax1.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))  # Force integer x-ticks
+ax1.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))  # Force integer y-ticks
 st.pyplot(fig1)
 
 ##############################
@@ -136,25 +139,25 @@ ax3.legend(title="Tag", bbox_to_anchor=(1.05, 1), loc="upper left")
 st.pyplot(fig3)
 
 
-import matplotlib.ticker as mticker
-
 ##############################
 # Analysis 4: Median & Average Estimated Owners per Year (Line Chart)
 ##############################
-st.write("### 4. Median & Average Estimated Owners per Year")
-
+st.write("### 4. Median Estimated Playerbase per Title per Year")
+st.write("This analysis presents a sharp decline starting in 2014, which most likely points to the explosion of Steam Greenlight titles and the subsequent flood of low-quality games to the market.")
+st.write("Sources:")
+st.write("https://steamcommunity.com/games/593110/announcements/detail/1328973169870947116, https://www.theguardian.com/technology/2017/feb/13/valve-kills-steam-greenlight-heres-why-it-matters")
 # Compute median & mean estimated owners per year
-owners_stats = filtered_df.groupby("release_year")["estimated_owners"].agg(["median", "mean"]).reset_index()
+owners_stats = filtered_df.groupby("release_year")["estimated_owners_boxleiter"].agg(["median", "mean"]).reset_index()
 
 # Plot
 fig4, ax4 = plt.subplots(figsize=(10, 5))
 ax4.plot(owners_stats["release_year"], owners_stats["median"], marker="o", linewidth=2, label="Median Owners")
-ax4.plot(owners_stats["release_year"], owners_stats["mean"], marker="s", linewidth=2, label="Average Owners")
+# ax4.plot(owners_stats["release_year"], owners_stats["mean"], marker="s", linewidth=2, label="Average Owners")
 
 # Set labels and title
 ax4.set_xlabel("Release Year")
 ax4.set_ylabel("Estimated Owners")
-ax4.set_title("Estimated Owners: Median & Average per Year")
+ax4.set_title("Estimated Playerbase: Median per title per Year")
 ax4.legend()
 
 # Ensure x-axis and y-axis ticks are integers
@@ -169,6 +172,9 @@ st.pyplot(fig4)
 # Analysis 5: Average Review Score per Year (Line Chart)
 ##############################
 st.write("### 5. Average Review Score per Year")
+st.write(
+    "Coinciding with the decline in estimated playerbase and the peak of the Steam Greenlight crisis in 2016, the average review score per year shows a marked decline starting in between 2014 and 2018."
+)
 
 # Ensure positive/negative review columns exist and drop rows where either is missing
 filtered_reviews = filtered_df.dropna(subset=["steam_positive_reviews", "steam_negative_reviews"])
@@ -198,7 +204,9 @@ ax5.plot(review_stats["release_year"], review_stats["review_score"], marker="o",
 ax5.set_xlabel("Release Year")
 ax5.set_ylabel("Average Review Score")
 ax5.set_title("Average Review Score per Year")
-ax5.xaxis.set_minor_locator(AutoMinorLocator())
+ax5.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))  # Force integer x-ticks
+ax5.xaxis.set_minor_locator(AutoMinorLocator(2))
+ax5.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))  # Force integer y-ticks
 st.pyplot(fig5)
 
 
