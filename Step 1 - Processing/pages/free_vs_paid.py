@@ -149,8 +149,9 @@ st.pyplot(fig6)
 # ##############################
 # # Analysis 5: Top/Worst Tags by Various Metrics
 # ##############################
-# TODO - Consider adjusting for outliers, because a few heavy hitters can skew the results whole plots.
-# TODO - Consider removing or weighting against niche tags? E.g. "lara croft" isn't a very useful tag for a general analysis.
+# TODO - Move the number of tags to a sidebar slider
+# TODO - Add a dropdown to select the metric to analyze instead of showing multiple?
+# TODO - Set an input for the smoothing parameter k in the Bayesian shrinkage (and does a value of 0 disable it?)
 st.write("### 5. Best and Worse Tags by Various Metrics")
 
 
@@ -162,20 +163,33 @@ def get_relative_impact_by_tag(df, monetization_model, metric) -> pd.DataFrame:
     df_exploded_by_tag = sub_df.explode("tags")
     df_exploded_by_tag = df_exploded_by_tag[df_exploded_by_tag["tags"].notna()]
 
-    # Compute the average value of the metric per tag
-    df_per_tag_stats = df_exploded_by_tag.groupby("tags")[metric].mean().reset_index()
+    # Debug: print all tags with the number of times they appear in the dataset
+    tag_counts = df_exploded_by_tag["tags"].value_counts()
+    print(tag_counts)
 
-    # Compute the relative difference of that tag's average metric value compared to the overall average
+    # Compute the average value of the metric per tag, along with the count of occurrences
+    df_per_tag_stats = df_exploded_by_tag.groupby("tags").agg(mean_metric=(metric, "mean"), count=("tags", "count")).reset_index()
+
+    # Compute the global mean for the metric
+    global_mean = df[metric].mean()
+
+    #########################################################
+    # Bayesian shrinkage
+    # i.e. adjust each tag's mean by blending it with the global mean
+    # This reduces the impact of tags with very few occurrences
+    # https://kiwidamien.github.io/shrinkage-and-empirical-bayes-to-improve-inference.html
+    ################################################
+    k = 10  # Smoothing parameter; adjust based on your needs, 10 is
+    df_per_tag_stats["smoothed_mean"] = (df_per_tag_stats["count"] * df_per_tag_stats["mean_metric"] + k * global_mean) / (df_per_tag_stats["count"] + k)
+
+    # Compute the relative difference using the smoothed mean
     # E.g. if "rpg" has "stem_positive_review_ratio" of 0.90 and the overall average is 0.80, the relative difference is (0.90 - 0.80) / 0.80 = 0.125
     # E.g. if "bowling" has "stem_positive_review_ratio" of 0.60 and the overall average is 0.80, the relative difference is (0.60 - 0.80) / 0.80 = -0.25
-    df_average_value = df[metric].mean()
-    df_per_tag_stats["relative_diff"] = (df_per_tag_stats[metric] - df_average_value) / df_average_value
-    df_per_tag_stats = df_per_tag_stats.sort_values(by="relative_diff", ascending=False)
+    # BUT tags with very few occurrences will be smoothed out towards the global mean
+    df_per_tag_stats["relative_diff"] = (df_per_tag_stats["smoothed_mean"] - global_mean) / global_mean
 
-    # Debug, print each tag and its relative difference
-    for index, row in df_per_tag_stats.iterrows():
-        print(row["tags"], row["relative_diff"])
-    print("Done")
+    # Sort by relative difference in descending order
+    df_per_tag_stats = df_per_tag_stats.sort_values(by="relative_diff", ascending=False)
 
     return df_per_tag_stats
 
