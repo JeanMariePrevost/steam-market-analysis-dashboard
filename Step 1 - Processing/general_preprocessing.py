@@ -480,7 +480,7 @@ df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "rogue-lite", "ro
 ####################################################################
 # "Usability/qol" columns to introduce
 ####################################################################
-# Introcud a "release_year" column from "release_date"
+# Introduce a "release_year" column from "release_date"
 enforce_datetime_column(df, "release_date")
 df["release_year"] = df["release_date"].dt.year
 
