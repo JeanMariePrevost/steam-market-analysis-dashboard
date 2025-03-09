@@ -34,7 +34,7 @@ def enforce_boolean_or_nan_column(df, column_name):
         raise KeyError(f"Column '{column_name}' does not exist in the DataFrame.")
 
     # Replace non-boolean values with pd.NA
-    df[column_name] = df[column_name].apply(lambda x: x if isinstance(x, bool) else pd.NA).astype("boolean")  # Convert to nullable boolean dtype
+    df[column_name] = df[column_name].map(lambda x: x if isinstance(x, bool) else pd.NA).astype("boolean")  # Convert to nullable boolean dtype
 
     print(f"{column_name} fully boolean ✅")
 
@@ -43,7 +43,7 @@ def enforce_string_or_nan_column(df, column_name):
     """Ensures a column is fully string, coercing invalid values to NaN."""
     if column_name not in df.columns:
         raise KeyError(f"Column '{column_name}' does not exist in the DataFrame.")
-    df[column_name] = df[column_name].apply(lambda x: x if isinstance(x, str) else np.nan)
+    df[column_name] = df[column_name].map(lambda x: x if isinstance(x, str) else np.nan)
     print(f"{column_name} fully string ✅")
 
 
@@ -81,7 +81,7 @@ def enforce_datetime_column(df, column_name):
         raise ValueError(f"Invalid date format in {column_name}: {repr(value)}")
 
     # Apply the parsing function
-    df[column_name] = df[column_name].apply(try_parsing_date)
+    df[column_name] = df[column_name].map(try_parsing_date)
 
     # Ensure the column is explicitly datetime64[ns]
     df[column_name] = pd.to_datetime(df[column_name], errors="coerce")
@@ -108,7 +108,7 @@ def enforce_list_column(df, column_name):
     #             raise TypeError(f"Invalid value in {column_name}: {repr(value)} (type: {type(value).__name__})")
 
     # # Apply the function to enforce correctness
-    # df[column_name] = df[column_name].apply(enforce_type_as_list)
+    # df[column_name] = df[column_name].map(enforce_type_as_list)
 
     # print(f"{column_name} fully list<string> ✅")
 
@@ -143,7 +143,7 @@ def normalize_lists_string_values(df, column_name, force_lowercase=True, remove_
             value_as_list.sort()
         return value_as_list
 
-    df[column_name] = df[column_name].apply(normalize_cell)
+    df[column_name] = df[column_name].map(normalize_cell)
     print(f"{column_name} fully normalized ✅")
 
 
@@ -292,7 +292,7 @@ def normalize_languages_column(df, column_name):
         normalized_languages.sort()
         return normalized_languages
 
-    df[column_name] = df[column_name].apply(normalize_cell)
+    df[column_name] = df[column_name].map(normalize_cell)
     print(f"{column_name} fully normalized ✅")
 
 
@@ -388,7 +388,7 @@ df.rename(columns={"positive": "steam_positive_reviews"}, inplace=True)
 
 # release_date stuff (we have YYYY-MM-DD format, "Feb 27, 2018" format, some with time (2020-04-05 00:00:00), and "Not Released", "coming_soon" and "unknown")...
 # First, extract "is_released" bool column from "release_date"
-df["is_released"] = df["release_date"].apply(lambda x: isinstance(x, str) and x.lower() not in ["not released", "coming soon"])
+df["is_released"] = df["release_date"].map(lambda x: isinstance(x, str) and x.lower() not in ["not released", "coming soon"])
 
 # steam_deck
 df.rename(columns={"steam_deck": "runs_on_steam_deck"}, inplace=True)
@@ -396,6 +396,7 @@ df.rename(columns={"steam_deck": "runs_on_steam_deck"}, inplace=True)
 # Drop columns too weak, irrelevant, or sparse
 df.drop(columns=["num_reviews_recent", "num_reviews_total", "pct_pos_recent", "pct_pos_total"], inplace=True)
 
+df.drop(columns=["is_released"], inplace=True)  # Not accurate at all
 
 ####################################################################
 # Combine all punctual (by date) pricing info
@@ -427,8 +428,8 @@ df.drop(columns=columns_to_drop, inplace=True)
 normalize_lists_string_values(df, "genres")
 normalize_lists_string_values(df, "tags")
 df["is_f2p"] = False
-df.loc[df["genres"].apply(lambda x: "free to play" in x), "is_f2p"] = True
-df.loc[df["tags"].apply(lambda x: "free to play" in x), "is_f2p"] = True
+df.loc[df["genres"].map(lambda x: "free to play" in x), "is_f2p"] = True
+df.loc[df["tags"].map(lambda x: "free to play" in x), "is_f2p"] = True
 # Set "is_free" to False for games that don't have any "free to play" tage/genre _and_ that have both a price_original and a price_latest > 0, which are extremely unlikely to actually be free
 enforce_float_or_nan_column(df, "price_original")
 enforce_float_or_nan_column(df, "price_latest")
@@ -447,6 +448,10 @@ df.loc[df["is_f2p"], "price_original"] = 0.0
 # Turn all text (e.g. unlreleased) and empties into NaN
 enforce_float_or_nan_column(df, "price_latest")
 enforce_float_or_nan_column(df, "price_original")
+
+# Cross-populate prices columns where one is missing, as current or original price should be a good proxy of the other
+df.loc[df["price_latest"].isna(), "price_latest"] = df["price_original"]
+df.loc[df["price_original"].isna(), "price_original"] = df["price_latest"]
 
 
 ####################################################################
@@ -469,12 +474,12 @@ def replace_in_list(lst, before, after):
 
 
 # Apply the function with "rogue-like" -> "roguelike"
-df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "base building", "base-building"))
-df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "dystopian ", "dystopian"))
-df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "parody ", "parody"))
-df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "puzzle-platformer", "puzzle platformer"))
-df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "rogue-like", "roguelike"))
-df["tags"] = df["tags"].apply(lambda lst: replace_in_list(lst, "rogue-lite", "roguelite"))
+df["tags"] = df["tags"].map(lambda lst: replace_in_list(lst, "base building", "base-building"))
+df["tags"] = df["tags"].map(lambda lst: replace_in_list(lst, "dystopian ", "dystopian"))
+df["tags"] = df["tags"].map(lambda lst: replace_in_list(lst, "parody ", "parody"))
+df["tags"] = df["tags"].map(lambda lst: replace_in_list(lst, "puzzle-platformer", "puzzle platformer"))
+df["tags"] = df["tags"].map(lambda lst: replace_in_list(lst, "rogue-like", "roguelike"))
+df["tags"] = df["tags"].map(lambda lst: replace_in_list(lst, "rogue-lite", "roguelite"))
 
 
 ####################################################################
@@ -506,7 +511,7 @@ df.drop(columns=["is_free", "is_f2p"], inplace=True)
 # Estimated owners were positively useless and rather sparse. Even review numbers often made them technically impossible.
 # I've decided to rely on the conservative Boxleiter method
 
-minimum_total_reviews = 25  # Minimum total reviews to consider the estimate
+minimum_total_reviews = 1  # Minimum total reviews to consider the estimate (don't use?)
 
 df.drop(columns=["estimated_owners"], inplace=True)
 df.drop(columns=["steam_spy_estimated_owners"], inplace=True)
@@ -530,7 +535,7 @@ boxleiter_number = 80  # Boxleiter's Method "owner per review" multipler
 
 # User Commitment Bias : Expensive games get more reviews per owner, F2P games get the least
 # Closest match was roughly `3 + 2 * np.exp(-0.2 * price) -2`, where F2P games get nearly 3 _TIMES_ fewer reviews per player (see marvel Rivals, TF2, etc), and the effect vanishing around $30
-df["temp_commitment_bias_mult"] = df["price_original"].apply(lambda x: 3 + 2 * np.exp(-0.2 * x) - 2)
+df["temp_commitment_bias_mult"] = df["price_original"].map(lambda x: 3 + 2 * np.exp(-0.2 * x) - 2)
 
 
 df["estimated_owners_boxleiter"] = (
@@ -556,6 +561,8 @@ df["years_since_release"] = most_recent_year - df["release_year"]
 # The dislike ratio is calculated as the ratio of negative reviews to total reviews
 df["dislike_ratio"] = (df["steam_negative_reviews"] / df["steam_total_reviews"]).pow(2)  # Makes the dislike ratio less impactful near the positive end
 df["discount_factor"] = 0.5 * np.exp(-df["dislike_ratio"] * df["years_since_release"]) + 0.3
+# Fill NaNs (missing years_since_release) with a simpler discount factor based on reviews only
+df["discount_factor"].fillna(0.8 - 0.3 * df["dislike_ratio"], inplace=True)
 
 ####################################################################
 # Calculate the estimated gross revenue using the Boxleiter method
@@ -581,7 +588,7 @@ column_type_mapprings = {
     "average_non_steam_review_score": enforce_float_or_nan_column,
     "average_time_to_beat": enforce_float_or_nan_column,
     "categories": normalize_lists_string_values,
-    "controller_support": enforce_boolean_or_nan_column,
+    "controller_support": enforce_string_or_nan_column,
     "developers": normalize_lists_string_values,
     "dlc_count": enforce_int_or_nan_column,
     "early_access": enforce_boolean_or_nan_column,
@@ -591,7 +598,6 @@ column_type_mapprings = {
     "genres": normalize_lists_string_values,
     "has_demos": enforce_boolean_or_nan_column,
     "has_drm": enforce_boolean_or_nan_column,
-    "is_released": enforce_boolean_or_nan_column,
     "languages_supported": normalize_languages_column,
     "languages_with_full_audio": normalize_languages_column,
     "monetization_model": enforce_string_or_nan_column,
@@ -649,7 +655,7 @@ if all_columns:
 df = df.reindex(sorted(df.columns), axis=1)
 
 # Save results so far to a CSV file
-output_filename = "combined_df_cleaned"
+output_filename = "combined_df_preprocessed"
 df.to_csv(output_filename + ".csv", index=True)
 print(f"Saved cleaned DataFrame to {output_filename}.csv")
 
@@ -657,7 +663,26 @@ print(f"Saved cleaned DataFrame to {output_filename}.csv")
 df.to_parquet(output_filename + ".parquet")
 print(f"Saved cleaned DataFrame to {output_filename}.parquet")
 
-df.to_feather(output_filename + ".feather")
-print(f"Saved cleaned DataFrame to {output_filename}.feather")
+
+####################################################################
+# Special version with far fewer sparse rows
+####################################################################
+# Drop rows with NA positive reviews
+df = df.dropna(subset=["steam_positive_reviews"])
+
+# Drop rows with neither a price_original, price_latest, nor monetization_model
+df = df.dropna(subset=["price_original", "price_latest", "monetization_model"], how="all")
+
+# Drop rows without ANY of runs_on_linux, runs_on_mac, runs_on_steam_deck, runs_on_windows
+df = df.dropna(subset=["runs_on_linux", "runs_on_mac", "runs_on_steam_deck", "runs_on_windows"], how="all")
+
+# Save results so far to a CSV file
+output_filename = "combined_df_preprocessed_dense"
+df.to_csv(output_filename + ".csv", index=True)
+print(f"Saved cleaned DataFrame to {output_filename}.csv")
+
+# Save also to parquet
+df.to_parquet(output_filename + ".parquet")
+print(f"Saved cleaned DataFrame to {output_filename}.parquet")
 
 print("Cleaning complete ✅")
