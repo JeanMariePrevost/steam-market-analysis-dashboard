@@ -6,12 +6,10 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import streamlit as st
+from utils import load_main_dataset
 
 # Load Data
-df = pd.read_parquet(r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\Step 1 - Processing\combined_df_cleaned.parquet")
-
-
-df = df.convert_dtypes()  # Convert columns to best possible types
+df = load_main_dataset()
 
 
 # Prep / type inference for arrays
@@ -50,6 +48,10 @@ st.markdown(
 # Add some content to see the styling
 st.title("Game Releases by Price")
 st.write("This page allows you to explore the distribution of game releases by their launch price. You can filter by genre, tag, release year, and price range to see how the distribution changes.")
+
+if df is None or df.empty:
+    st.warning(f"Data could be loaded. Please ensure the path is correct and the data is available.")
+    st.stop()
 
 st.sidebar.title("Filters")
 # Genre options with counts (sorted alphabetically)
@@ -106,10 +108,11 @@ if filtered_df.empty:
     st.warning("No data available for the selected filters. Please adjust the filters.")
     st.stop()
 
-# fig, ax = plt.subplots(figsize=(12, 6), dpi=200)  # Larger figure for better scaling
-fig, ax = plt.subplots(figsize=(12, 6))
-
+############################################################
+# 1. Number of releases by price
+############################################################
 # Histogram (bars)
+fig, ax = plt.subplots(figsize=(12, 6))
 hist_values, bin_edges, _ = ax.hist(filtered_df["price_original"], bins=num_bins, alpha=0.6, color="blue", edgecolor="black")
 
 # KDE Plot (Scaled to Histogram)
@@ -141,3 +144,38 @@ ax.set_title("Game Releases by Launch Price")
 ax.legend()
 
 st.pyplot(fig)
+
+
+############################################################
+# 2. Total Playerbase by price
+############################################################
+
+
+def plot_weighted_histogram(filtered_df, price_range, num_bins, weight_column, ylabel, title):
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Copy the filtered DataFrame and remove NA values in the weight column
+    filtered_df = filtered_df.copy()
+    filtered_df = filtered_df.dropna(subset=[weight_column])
+
+    # Plot weighted histogram
+    hist_vals, bin_edges, _ = ax.hist(filtered_df["price_original"], bins=num_bins, weights=filtered_df[weight_column], alpha=0.6, color="blue", edgecolor="black")
+
+    # Configure x-axis ticks and labels
+    ticks = np.linspace(price_range[0], price_range[1], 11)
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([f"${int(t)}" for t in ticks])
+    ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+
+    # Set labels, title, and legend
+    ax.set(xlabel="Price ($)", ylabel=ylabel, title=title)
+    ax.legend()
+
+    st.pyplot(fig)
+
+
+# Graph 1: Total players (estimated_owners_boxleiter)
+plot_weighted_histogram(filtered_df, price_range, num_bins, weight_column="estimated_owners_boxleiter", ylabel="Total Estimated Owners", title="Estimated Owners by Launch Price")
+
+# Graph 2: Gross revenue (estimated_gross_revenue_boxleiter)
+plot_weighted_histogram(filtered_df, price_range, num_bins, weight_column="estimated_gross_revenue_boxleiter", ylabel="Total Estimated Gross Revenue", title="Estimated Gross Revenue by Launch Price")

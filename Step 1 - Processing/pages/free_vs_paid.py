@@ -1,18 +1,15 @@
-import ast
 import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
 import matplotlib.ticker as mticker
-import numpy as np
 import pandas as pd
 import streamlit as st
 from utils import remove_outliers_iqr
-import altair as alt
+from utils import load_main_dataset
 
 ##############################
 # Load & Prepare Data
 ##############################
-df = pd.read_parquet(r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\Step 1 - Processing\combined_df_cleaned.parquet")
-df = df.convert_dtypes()
+df = load_main_dataset()
 
 # Page configuration & custom CSS
 st.set_page_config(page_title="Free vs F2P vs Paid: Market Trends on Steam")
@@ -33,6 +30,10 @@ st.write(
     "This page presents analyses on the number of releases, total playerbase, and gross revenue generated over time, "
     "as well as tag correlations and rating breakdowns for Free, Free-to-Play (F2P), and Paid games on Steam."
 )
+
+if df is None or df.empty:
+    st.warning(f"Data could be loaded. Please ensure the path is correct and the data is available.")
+    st.stop()
 
 ##############################
 # Sidebar Filter: Release Year Range
