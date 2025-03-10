@@ -1,10 +1,23 @@
-import datetime
-import json
-import random
+"""
+This script contains all the logic to sequentially preprocess the merged dataset generated from merging_pipeline.py.
+The end result is a cleaner, more usable dataset with enforced types and value formats.
+It also introduces new columns and normalizes existing ones for better usability and analysis.
+However, it retains "human-readable" features such as tags, genres and languages as lists of strings.
+"""
+
 import pandas as pd
 import numpy as np
+import os
+import subprocess
 import ast  # For safely converting string representations of lists
-from complex_merge import merge_dataframes_with_mappings, combine_list_unique_values
+
+
+# Define and create output directory if it doesn't exist
+script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
+output_dir = os.path.join(script_dir, "preprocessed_output")  # Define the output directory relative to the script's location
+os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists
+
+source_csv_path = os.path.join(script_dir, "merge_output/combined_df_final.csv")
 
 
 ####################################################################
@@ -93,24 +106,6 @@ def enforce_list_column(df, column_name):
     """
     Ensures every cell of a column is a list<string> or [], squashing all invalid values to [].
     """
-
-    # def enforce_type_as_list(value):
-    #     if isinstance(value, list) and all(isinstance(i, str) for i in value):
-    #         return value
-    #     elif pd.isna(value) or value == "":  # Correctly type empty lists
-    #         return []
-    #     else:
-    #         try:
-    #             parsed_value = ast.literal_eval(value)  # Convert stringified lists
-    #             if isinstance(parsed_value, list) and all(isinstance(i, str) for i in parsed_value):
-    #                 return parsed_value  # Successfully converted valid list
-    #         except (ValueError, SyntaxError):
-    #             raise TypeError(f"Invalid value in {column_name}: {repr(value)} (type: {type(value).__name__})")
-
-    # # Apply the function to enforce correctness
-    # df[column_name] = df[column_name].map(enforce_type_as_list)
-
-    # print(f"{column_name} fully list<string> ✅")
 
 
 def normalize_lists_string_values(df, column_name, force_lowercase=True, remove_duplicate_elements=True, sort_elements=True):
@@ -318,10 +313,12 @@ def normalize_datetime_column(df, column_name):
     print(f"{column_name} fully normalized ✅")
 
 
-####################################################################
+##########################################################################################################################
+##########################################################################################################################
 # Cleaning begins here
-####################################################################
-df = pd.read_csv(r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\Step 1 - Processing\combined_df_step9.csv")
+##########################################################################################################################
+##########################################################################################################################
+df = pd.read_csv(source_csv_path)
 
 ####################################################################
 # Index
@@ -356,8 +353,13 @@ df.rename(columns={"full_audio_languages": "languages_with_full_audio"}, inplace
 #   - hltb_complete
 #   - igdb_complete
 #   - igdb_single
-add_average_column(df, ["gamefaqs_game_length", "hltb_single", "hltb_complete", "igdb_complete", "igdb_single"], "average_time_to_beat")
-df.drop(columns=["gamefaqs_game_length", "hltb_single", "hltb_complete", "igdb_complete", "igdb_single"], inplace=True)
+#   - hltb_main_story
+#   - hltb_main_plus_extras
+#   - hltb_completionist
+add_average_column(
+    df, ["gamefaqs_game_length", "hltb_single", "hltb_complete", "igdb_complete", "igdb_single", "hltb_main_story", "hltb_main_plus_extras", "hltb_completionist"], "average_time_to_beat"
+)
+df.drop(columns=["gamefaqs_game_length", "hltb_single", "hltb_complete", "igdb_complete", "igdb_single", "hltb_main_story", "hltb_main_plus_extras", "hltb_completionist"], inplace=True)
 
 # External review scores
 #   - gamefaqs_review_score (out of 5!)
@@ -411,6 +413,18 @@ ordered_price_columns = [
     "price_original",
 ]
 
+# Fill missing price_original values with the highest available price
+enforce_float_or_nan_column(df, "price_original")
+enforce_float_or_nan_column(df, "price_2024_09")
+enforce_float_or_nan_column(df, "price_2024_08")
+enforce_float_or_nan_column(df, "price_2024_05")
+enforce_float_or_nan_column(df, "price_2023_11")
+enforce_float_or_nan_column(df, "price_2019_06")
+
+# Set price_original to the highest possible value _IF_ if is NaN or 0
+df.loc[df["price_original"].isna() | (df["price_original"] == 0), "price_original"] = df[ordered_price_columns].astype(float).max(axis=1)
+
+# Introduced a "price_latest" column that is the most recent price available
 df["price_latest"] = df[ordered_price_columns].bfill(axis=1).iloc[:, 0]
 
 # Drop the old "by date" price columns
@@ -517,7 +531,7 @@ df.drop(columns=["estimated_owners"], inplace=True)
 df.drop(columns=["steam_spy_estimated_owners"], inplace=True)
 
 # temp_scale_factor = 1, or 0.75 if steam_negative_reviews + steam_positive_reviews > 100000
-df["temp_scale_factor"] = 1  # Default to 1
+df["temp_scale_factor"] = 1.0  # Default to 1.0
 df.loc[df["steam_total_reviews"] > 100000, "temp_scale_factor"] = 0.75
 
 
@@ -648,6 +662,18 @@ if all_columns:
 
 
 ####################################################################
+# Collapsing pseudo-duplicates
+####################################################################
+# Many records appear a BUNCH of times for technical reasons, often a single of the enties being the "actual game"
+# For example see "Shadow of the Tomb Raider: Definitive Edition"
+# We'll collapse these into a single record, keeping the most complete information and highest numerical values
+
+from utils import collapse_pseudo_duplicate_games
+
+df = collapse_pseudo_duplicate_games(df)
+
+
+####################################################################
 # Finalize and save
 ####################################################################
 
@@ -656,11 +682,11 @@ df = df.reindex(sorted(df.columns), axis=1)
 
 # Save results so far to a CSV file
 output_filename = "combined_df_preprocessed"
-df.to_csv(output_filename + ".csv", index=True)
+df.to_csv(f"{output_dir}/{output_filename}.csv", index=True)
 print(f"Saved cleaned DataFrame to {output_filename}.csv")
 
 # Save also to parquet
-df.to_parquet(output_filename + ".parquet")
+df.to_parquet(f"{output_dir}/{output_filename}.parquet")
 print(f"Saved cleaned DataFrame to {output_filename}.parquet")
 
 
@@ -678,11 +704,13 @@ df = df.dropna(subset=["runs_on_linux", "runs_on_mac", "runs_on_steam_deck", "ru
 
 # Save results so far to a CSV file
 output_filename = "combined_df_preprocessed_dense"
-df.to_csv(output_filename + ".csv", index=True)
+df.to_csv(f"{output_dir}/{output_filename}.csv", index=True)
 print(f"Saved cleaned DataFrame to {output_filename}.csv")
 
 # Save also to parquet
-df.to_parquet(output_filename + ".parquet")
+df.to_parquet(f"{output_dir}/{output_filename}.parquet")
 print(f"Saved cleaned DataFrame to {output_filename}.parquet")
 
 print("Cleaning complete ✅")
+
+subprocess.Popen(f'explorer /select,"{output_dir}\\{output_filename}.parquet"')  # Open the output directory in Windows Explorer
