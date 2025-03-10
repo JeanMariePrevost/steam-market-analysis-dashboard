@@ -39,7 +39,7 @@ def remove_outliers_iqr(df, value_col, threshold=1.5, cap_instead_of_drop=False)
         return df[(df[value_col] >= lower_bound) & (df[value_col] <= upper_bound)]
 
 
-def collapse_duplicate_games(df: pd.DataFrame) -> pd.DataFrame:
+def collapse_pseudo_duplicate_games(df: pd.DataFrame) -> pd.DataFrame:
     """
     Remove pseudo-duplicate games from the DataFrame by selecting the best candidate per group.
 
