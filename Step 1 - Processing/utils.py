@@ -106,7 +106,7 @@ def collapse_pseudo_duplicate_games(df: pd.DataFrame) -> pd.DataFrame:
                         accum[col] = val
         return accum
 
-    print("Collapsing duplicate games... This may take a while...")
+    print("Collapsing pseudo-duplicate entries... This may take a while...")
 
     # Group by ["name", "release_date"] to identify pseudo-duplicates.
     group_cols = ["name", "release_date"]

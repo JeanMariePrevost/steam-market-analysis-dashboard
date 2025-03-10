@@ -1,21 +1,13 @@
 *__pycache__*
+/venv/
+venv/
 datasets/
-Step 1 - Processing/sampled_data.csv
-.gitignore
-Step 1 - Processing/set*_trimmed.csv
-Step 1 - Processing/set*_processed.csv
-Step 1 - Processing/set*_processed_index.csv
-Step 1 - Processing/json_data.csv
-Step 1 - Processing/scratch.py
-Step 1 - Processing/combined_df_step*.csv
-Step 1 - Processing/complex_merge_test_results.csv
-Step 1 - Processing/sujaykapadnis_games-on-steam_steamdb.csv
-Step 1 - Processing/souyama_steam_store_data.csv
-Step 1 - Processing/combined_df_partial_cleaned.csv
-Step 1 - Processing/combined_df_cleaned.feather
-Step 1 - Processing/combined_df_cleaned.json
-Step 1 - Processing/combined_df_cleaned_with_hltb.csv
-Step 1 - Processing/combined_df_cleaned.csv
-Step 1 - Processing/combined_df_cleaned_with_owners.csv
+
 *.rar
 Step 1 - Processing/combined_df_cleaned.parquet
+# *.xlsx
+*.csv
+*.parquet
+*.feather
+*.parquet
+*.docx
