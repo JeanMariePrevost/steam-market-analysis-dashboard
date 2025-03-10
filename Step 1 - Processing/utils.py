@@ -1,5 +1,27 @@
 import numpy as np
 import pandas as pd
+import os
+
+
+def load_main_dataset() -> pd.DataFrame:
+    """
+    Load the preprocessed data from the parquet file.
+    Returns None if an error occurs.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
+    # parent_dir = os.path.dirname(script_dir)  # Get the parent directory of the script directory
+    data_path = f"{script_dir}\\preprocessed_output\\combined_df_preprocessed_dense.parquet"
+
+    # Debug, resolve path and print it, and whether the file exists
+    print(os.path.abspath(data_path))
+    print(os.path.exists(data_path))
+
+    try:
+        df = pd.read_parquet(data_path)
+        return df
+    except Exception as e:
+        print(f"An error occurred while reading the data: {e}")
+        return None
 
 
 def remove_outliers_iqr(df, value_col, threshold=1.5, cap_instead_of_drop=False):

@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 import os
 import matplotlib.ticker as mticker
+from utils import load_main_dataset
 
 # Page configuration & custom CSS
 st.set_page_config(page_title="Overview of Releases & Trends")
@@ -21,31 +22,14 @@ st.markdown(
 )
 
 
-# Load Data
-script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-parent_dir = os.path.dirname(script_dir)  # Get the parent directory of the script directory
-data_path = f"{parent_dir}\\preprocessed_output\\combined_df_preprocessed_dense.parquet"
-
-# Debug, resolve path and print it, and whether the file exists
-import os
-
-print(os.path.abspath(data_path))
-print(os.path.exists(data_path))
-
-try:
-    df = pd.read_parquet(data_path)
-except Exception as e:
-    st.error(f"An error occurred while reading the data: {e}")
-    df = None
-# df = df.convert_dtypes()
-
+df = load_main_dataset()
 
 # Page Title & Description
 st.title("Overview: Game Releases & Market Trends")
 st.write("This page presents several static analyses that offer a market-wide overview of game releases, trends in genres and tags, audience reach, user review quality, and pricing strategies.")
 
 if df is None or df.empty:
-    st.warning(f"Data could not be found at the specified path: {data_path}. Please ensure the path is correct and the data is available.")
+    st.warning(f"Data could be loaded. Please ensure the path is correct and the data is available.")
     st.stop()
 
 # Sidebar Filter: Release Year Range
