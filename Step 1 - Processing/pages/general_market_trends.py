@@ -4,11 +4,8 @@ from matplotlib.ticker import AutoMinorLocator
 import numpy as np
 import pandas as pd
 import streamlit as st
+import os
 import matplotlib.ticker as mticker
-
-# Load Data
-df = pd.read_parquet(r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\Step 1 - Processing\combined_df_cleaned.parquet")
-# df = df.convert_dtypes()
 
 # Page configuration & custom CSS
 st.set_page_config(page_title="Overview of Releases & Trends")
@@ -23,9 +20,33 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+# Load Data
+script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
+parent_dir = os.path.dirname(script_dir)  # Get the parent directory of the script directory
+data_path = f"{parent_dir}\\preprocessed_output\\combined_df_preprocessed_dense.parquet"
+
+# Debug, resolve path and print it, and whether the file exists
+import os
+
+print(os.path.abspath(data_path))
+print(os.path.exists(data_path))
+
+try:
+    df = pd.read_parquet(data_path)
+except Exception as e:
+    st.error(f"An error occurred while reading the data: {e}")
+    df = None
+# df = df.convert_dtypes()
+
+
 # Page Title & Description
 st.title("Overview: Game Releases & Market Trends")
 st.write("This page presents several static analyses that offer a market-wide overview of game releases, trends in genres and tags, audience reach, user review quality, and pricing strategies.")
+
+if df is None or df.empty:
+    st.warning(f"Data could not be found at the specified path: {data_path}. Please ensure the path is correct and the data is available.")
+    st.stop()
 
 # Sidebar Filter: Release Year Range
 st.sidebar.title("Filters")
@@ -46,7 +67,9 @@ if selected_year_range[0] < 2007:
 ##############################
 # Analysis 1: Releases Across Years (Line Chart)
 ##############################
-st.write("### 1. Total Releases Across Years")
+st.write("### 1. General Trends Across Time")
+st.write("This analysis presents the total number of game releases per year and the total number of players across all titles released in each year.")
+st.write("We notice a shift in the number of releases starting in 2014, which may be related to the rise of indie developers and the introduction of Steam Greenlight.")
 release_counts = filtered_df.groupby("release_year").size().reset_index(name="count")
 
 fig1, ax1 = plt.subplots(figsize=(10, 5))
@@ -58,6 +81,25 @@ ax1.xaxis.set_minor_locator(AutoMinorLocator(2))
 ax1.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))  # Force integer x-ticks
 ax1.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))  # Force integer y-ticks
 st.pyplot(fig1)
+
+##############################
+# Analysis 1.1: Total Players Across Years (Line Chart)
+##############################
+# st.write("### 1. Total Players Across Years")
+st.write("And below we see the total number of owners across all games released in each year.")
+st.write("We see that even though the number of titles grow, and Steam's MAU grows, the purchases of games in recent years appears to decline, suggesting a displacement towards older titles.")
+release_counts = filtered_df.groupby("release_year")["estimated_owners_boxleiter"].sum().reset_index(name="count")
+
+fig1, ax1 = plt.subplots(figsize=(10, 5))
+ax1.plot(release_counts["release_year"], release_counts["count"], marker="o", linewidth=2)
+ax1.set_xlabel("Release Year")
+ax1.set_ylabel("Number of Players")
+ax1.set_title("Total Number of Title Owners per Year of Release")
+ax1.xaxis.set_minor_locator(AutoMinorLocator(2))
+ax1.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))  # Force integer x-ticks
+ax1.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))  # Force integer
+st.pyplot(fig1)
+
 
 ##############################
 # Analysis 2: Top N Genres Across Years (Stacked Bar Chart - Ratio)
