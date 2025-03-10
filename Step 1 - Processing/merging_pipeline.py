@@ -4,32 +4,51 @@ The process is not particularly clean or optimized, but it should be a one-time 
 """
 
 import json
-import random
 import pandas as pd
 import numpy as np
+import os
+import subprocess
+
 from complex_merge import merge_dataframes_with_mappings, combine_list_unique_values
 
 # Selected datasets paths
-set1_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\artermiloff_steam-games-dataset\games_may2024_cleaned.csv"  # Great general metadata foundation
-set2_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\antonkozyriev_game-recommendations-on-steam\games.csv"  # grab price_final and price_original
-set3_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\fronkongames_steam-games-dataset\games.csv"  # Has interesting features like metacritic score, achievement, recommandations, genres, tags (combine across sets on these?)
-set4_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\fronkongames_steam-games-dataset\games.json"  # Unsure. Includes game descriptions an such (NLP?) DLCs, genres, and especially "estimated_owners"
-set5_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\nikdavis_steam-store-games_steamspy\steam.csv"  # playtime stats and owners
-set6_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\srgiomanhes_steam-games-dataset-2025\steam_games.csv"  # Similar to base set, with 2025 data, but we have to ensure ALL its columns can fully merge in
-set7_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\sujaykapadnis_games-on-steam\steamdb.json"  # Some VERY interesting "meta" fields from gamefaqs, stsp, hltb, metacritic and igdb IF complete enough
-set8_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\vicentearce_steamdata\game_data.csv"  # For the vr tags, whch I THINK other sets don't offer
-set9_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\vicentearce_steamdata\final\steam_games.csv"  # Coop, online, workshop support, languages, precise rating, playtime, peak player, owners, has dlc, has demos....
-set10_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\souyama_steam-dataset\steam_dataset\steamspy\detailed\steam_spy_detailed.json"  # Owners, CCU, detailled tags
-set11_path = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\souyama_steam-dataset\steam_dataset\appinfo\store_data\steam_store_data.json"  # F2P, required age, what is price_overview?, whether games have demos...
-set12_path = (
-    r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets\kasumil5x_howlongtobeat-games-completion-times\games.csv"  # Acually good time to complete, but have to merge on name...
-)
+datasets_directory = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets"
+# Great general metadata foundation
+set1_path = f"{datasets_directory}\\artermiloff_steam-games-dataset\\games_may2024_cleaned.csv"
+# grab price_final and price_original
+set2_path = f"{datasets_directory}\\antonkozyriev_game-recommendations-on-steam\\games.csv"
+# Has interesting features like metacritic score, achievement, recommandations, genres, tags (combine across sets on these?)
+set3_path = f"{datasets_directory}\\fronkongames_steam-games-dataset\\games.csv"
+# Unsure. Includes game descriptions an such (NLP?) DLCs, genres, and especially "estimated_owners"
+set4_path = f"{datasets_directory}\\fronkongames_steam-games-dataset\\games.json"
+# playtime stats and owners
+set5_path = f"{datasets_directory}\\nikdavis_steam-store-games_steamspy\\steam.csv"
+# Similar to base set, with 2025 data, but we have to ensure ALL its columns can fully merge in
+set6_path = f"{datasets_directory}\\srgiomanhes_steam-games-dataset-2025\\steam_games.csv"
+# Some VERY interesting "meta" fields from gamefaqs, stsp, hltb, metacritic and igdb IF complete enough
+set7_path = f"{datasets_directory}\\sujaykapadnis_games-on-steam\\steamdb.json"
+# For the vr tags, whch I THINK other sets don't offer
+set8_path = f"{datasets_directory}\\vicentearce_steamdata\\game_data.csv"
+# Coop, online, workshop support, languages, precise rating, playtime, peak player, owners, has dlc, has demos....
+set9_path = f"{datasets_directory}\\vicentearce_steamdata\\final\\steam_games.csv"
+# Owners, CCU, detailled tags
+set10_path = f"{datasets_directory}\\souyama_steam-dataset\\steam_dataset\\steamspy\detailed\\steam_spy_detailed.json"
+# F2P, required age, what is price_overview?, whether games have demos...
+set11_path = f"{datasets_directory}\\souyama_steam-dataset\\steam_dataset\appinfo\store_data\\steam_store_data.json"
+# Acually good time to complete, but have to merge on name...
+set12_path = f"{datasets_directory}\\kasumil5x_howlongtobeat-games-completion-times\\games.csv"
 
-# To consider: antonkozyriev_game-recommendations-on-steam	games_metadata.json for its long tags list (unweighted)
+# Define and create output directory if it doesn't exist
+script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
+output_dir = os.path.join(script_dir, "merge_output")  # Define the output directory relative to the script's location
+os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists
 
 combined_df = pd.DataFrame()  # The "container" for the final merged DataFrame
 
 
+#####################################
+# Helper functions
+#####################################
 def apply_mappings(df, mappings, keep_only_mapped_columns=False) -> pd.DataFrame:
     """
     Renames and transforms columns of a DataFrame based on a given mappings list.
@@ -78,6 +97,8 @@ def count_items_in_string(value, separator=","):
 def average_range_string(value, separator=" - "):
     """Converts a range string (e.g., '100 - 200') into its average."""
     if isinstance(value, str):
+        if value == "0.0" or value == "0":
+            return 0
         try:
             numbers = list(map(int, value.split(separator)))
             return sum(numbers) / len(numbers) if numbers else 0
@@ -146,8 +167,9 @@ if True:  # Temporarily disable this block while working on the others
     print(df_set1.loc[df_set1["appid"] == 578080, ["screenshots", "movies", "estimated_owners"]])
 
     # Save the processed dataset
-    df_set1.to_csv("set1_processed.csv", index=False)
-    print("Processed dataset saved to set1_processed.csv")
+    df_set1.to_csv(f"{output_dir}/debug_set1_processed.csv", index=False)
+    df_set1.to_csv(f"{output_dir}/debug_set1_processed.csv", index=False)
+    print("Processed dataset saved to debug_set1_processed.csv")
 
     combined_df = df_set1  # Set the combined DataFrame to the processed set 1
 
@@ -194,14 +216,14 @@ if True:  # Temporarily disable this block while working on the others
     print(f"Head after: {df_set2.head()}")
 
     # Save the processed dataset
-    df_set2.to_csv("set2_processed.csv", index=False)
-    print("Processed dataset saved to set2_processed.csv")
+    df_set2.to_csv(f"{output_dir}/debug_set2_processed.csv", index=False)
+    print("Processed dataset saved to debug_set2_processed.csv")
 
     # Merge the processed set 2 into the combined DataFrame
     combined_df = merge_dataframes_with_mappings(combined_df, df_set2, {})
 
     # DEBUG - Save the combined DataFrame to a CSV file
-    combined_df.to_csv("combined_df_step2.csv", index=False)
+    combined_df.to_csv(f"{output_dir}/combined_df_at_step2.csv", index=False)
 
 
 # ===================================================================================================
@@ -252,7 +274,7 @@ print(f"Head after: {df_set3.head()}")
 
 
 # Save the processed dataset
-df_set3.to_csv("set3_processed.csv", index=False)
+df_set3.to_csv(f"{output_dir}/debug_set3_processed.csv", index=False)
 
 
 # Merge the processed set 3 into the combined DataFrame
@@ -271,7 +293,7 @@ merge_mappings = {
 combined_df = merge_dataframes_with_mappings(combined_df, df_set3, merge_mappings)
 
 # DEBUG - Save the combined DataFrame to a CSV file
-combined_df.to_csv("combined_df_step3.csv", index=False)
+combined_df.to_csv(f"{output_dir}/combined_df_at_step3.csv", index=False)
 
 # ===================================================================================================
 # ===================================================================================================
@@ -315,7 +337,7 @@ df_set5 = apply_mappings(df_set5, mappings, keep_only_mapped_columns=True)
 print(f"Head after: {df_set5.head()}")
 
 # Save the processed dataset
-df_set5.to_csv("set5_processed.csv", index=False)
+df_set5.to_csv(f"{output_dir}/debug_set5_processed.csv", index=False)
 
 
 merge_mappings = {
@@ -328,7 +350,7 @@ merge_mappings = {
 combined_df = merge_dataframes_with_mappings(combined_df, df_set5, merge_mappings)
 
 # DEBUG - Save the combined DataFrame to a CSV file
-combined_df.to_csv("combined_df_step5.csv", index=False)
+combined_df.to_csv(f"{output_dir}/combined_df_at_step5.csv", index=False)
 
 
 # ===================================================================================================
@@ -375,7 +397,7 @@ print(f"Head after: {df_set6.head()}")
 
 
 # Save the processed dataset
-df_set6.to_csv("set6_processed.csv", index=False)
+df_set6.to_csv(f"{output_dir}/debug_set6_processed.csv", index=False)
 
 
 merge_mappings = {
@@ -388,7 +410,7 @@ merge_mappings = {
 combined_df = merge_dataframes_with_mappings(combined_df, df_set6, merge_mappings)
 
 # DEBUG - Save the combined DataFrame to a CSV file
-combined_df.to_csv("combined_df_step6.csv", index=False)
+combined_df.to_csv(f"{output_dir}/combined_df_at_step6.csv", index=False)
 
 
 # ===================================================================================================
@@ -445,7 +467,7 @@ df_set7 = apply_mappings(df_set7, mappings, keep_only_mapped_columns=True)
 print(f"Head after: {df_set7.head()}")
 
 # Save the processed dataset
-df_set7.to_csv("set7_processed.csv", index=False)
+df_set7.to_csv(f"{output_dir}/debug_set7_processed.csv", index=False)
 
 merge_mappings = {
     "developers": combine_list_unique_values,
@@ -460,7 +482,7 @@ merge_mappings = {
 combined_df = merge_dataframes_with_mappings(combined_df, df_set7, merge_mappings)
 
 # DEBUG - Save the combined DataFrame to a CSV file
-combined_df.to_csv("combined_df_step7.csv", index=False)
+combined_df.to_csv(f"{output_dir}/combined_df_at_step7.csv", index=False)
 
 
 # ===================================================================================================
@@ -485,7 +507,7 @@ mappings = [
 df_set8 = apply_mappings(df_set8, mappings, keep_only_mapped_columns=True)
 
 # Save the processed dataset
-df_set8.to_csv("set8_processed.csv", index=False)
+df_set8.to_csv(f"{output_dir}/debug_set8_processed.csv", index=False)
 
 merge_mappings = {
     "tags": combine_list_unique_values,
@@ -494,7 +516,7 @@ merge_mappings = {
 combined_df = merge_dataframes_with_mappings(combined_df, df_set8, merge_mappings)
 
 # DEBUG - Save the combined DataFrame to a CSV file
-combined_df.to_csv("combined_df_step8.csv", index=False)
+combined_df.to_csv(f"{output_dir}/combined_df_at_step8.csv", index=False)
 
 
 # ===================================================================================================
@@ -544,7 +566,7 @@ mappings = [
 df_set9 = apply_mappings(df_set9, mappings, keep_only_mapped_columns=True)
 
 # Save the processed dataset
-df_set9.to_csv("set9_processed.csv", index=False)
+df_set9.to_csv(f"{output_dir}/debug_set9_processed.csv", index=False)
 
 merge_mappings = {
     "developers": combine_list_unique_values,
@@ -556,7 +578,7 @@ merge_mappings = {
 combined_df = merge_dataframes_with_mappings(combined_df, df_set9, merge_mappings)
 
 # DEBUG - Save the combined DataFrame to a CSV file
-combined_df.to_csv("combined_df_step9.csv", index=False)
+combined_df.to_csv(f"{output_dir}/combined_df_at_step9.csv", index=False)
 
 
 # ===================================================================================================
@@ -600,10 +622,22 @@ combined_df = combined_df.merge(df_set12, left_on="name", right_on="hltb_title",
 combined_df.drop(columns=["hltb_title"], inplace=True)
 
 # Save the processed dataset
-df_set12.to_csv("set9_processed.csv", index=False)
+df_set12.to_csv(f"{output_dir}/debug_set9_processed.csv", index=False)
 
 # DEBUG - Save the combined DataFrame to a CSV file
-combined_df.to_csv("combined_df_step12.csv", index=False)
+combined_df.to_csv(f"{output_dir}/combined_df_at_step12.csv", index=False)
 
 
-# HERE -  Try it, should be fine now AFAIK
+# ===================================================================================================
+# Finally, save the combined fully-merged DataFrame
+# ===================================================================================================
+final_output_filename = "combined_df_final.csv"
+combined_df.to_csv(f"{output_dir}/combined_df_final.csv", index=False)
+
+print("Processing complete. Final combined DataFrame saved to combined_df_final.csv")
+
+# Open output directory
+print(f"Opening output directory: {output_dir}")
+print(f"Focusing on file: {final_output_filename}")
+
+subprocess.Popen(f'explorer /select,"{output_dir}\\{final_output_filename}"')
