@@ -325,6 +325,8 @@ df = pd.read_csv(source_csv_path)
 ####################################################################
 df.set_index("appid", inplace=True)  # Make "appid" the index
 df.sort_index(inplace=True)  # Sort by index
+# Explicitly set the index name if it was "appid"
+df.index.name = "appid"
 
 if df.index.duplicated().any():
     raise ValueError("Duplicate appids found in the dataset. ❌")
@@ -679,6 +681,9 @@ df = collapse_pseudo_duplicate_games(df)
 
 # Sort columns alphabetically
 df = df.reindex(sorted(df.columns), axis=1)
+
+df.index.name = "appid"  # Ensure the index name is correct
+# df.reset_index(inplace=True)
 
 # Save results so far to a CSV file
 output_filename = "combined_df_preprocessed"
