@@ -150,3 +150,52 @@ def collapse_pseudo_duplicate_games(df: pd.DataFrame) -> pd.DataFrame:
     final_df = final_df.drop(columns=["score_reviews", "score_recommendations", "score_tags", "score_genres", "score_languages", "total_score"])
 
     return final_df
+
+
+def triangular_weighted_mean(df, value_column, selector_column, center, window_size):
+    """
+    Compute a triangular weighted mean for the values in `value_column` based on the `x_column`.
+    I.e. samples near the edge of the window will have less weight than those near the center.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing the data.
+        value_column (str): Name of the column containing the values to average (e.g., steam_positive_review_ratio).
+        x_column (str): Name of the column to base the weights on (e.g., price_original).
+        center (float): The center value for the triangular window.
+        window_size (float): The half-width of the triangular window.
+
+    Returns:
+        float: The triangular weighted mean of the values. Returns np.nan if no valid weights exist.
+    """
+
+    # Exlude rows with missing values in either column
+    df = df.dropna(subset=[value_column, selector_column])
+
+    # Keep only the rows for which the selector_column is within the window
+    df = df[(df[selector_column] >= center - window_size) & (df[selector_column] <= center + window_size)]
+
+    # print(len(df))
+
+    # Compute the triangular weights
+    df["distance"] = np.abs(df[selector_column] - center)
+    df["weights"] = 1 - df["distance"] / window_size
+
+    # Debug: Print like 20 random selector_column -> weight pairs
+    # print(df.sample(20, replace=True)[[selector_column, "weights"]])
+
+    # If no weights are positive, return np.nan to avoid division by zero
+    if df["weights"].sum() == 0:
+        return np.nan
+
+    # # Debug the rest step by step
+    # print(df[value_column].head())
+    # print(weights)
+    # # Check the shapes
+    # print(df[value_column].shape)
+    # print(weights.shape)
+    # print(df[value_column].dropna().shape)
+    # print(weights.dropna().shape)
+    # print(np.average(df[value_column], weights=weights))
+
+    # Compute and return the weighted average
+    return np.average(df[value_column], weights=df["weights"])
