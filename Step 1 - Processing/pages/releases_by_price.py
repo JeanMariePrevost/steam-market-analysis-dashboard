@@ -231,18 +231,30 @@ st.pyplot(fig)
 #################################################################
 #################################################################
 #################################################################
-
-
-# Configurable grid parameters
-n_grid_points = 50  # Number of points in the price grid
+# 4 - Sliding Window Analysis with Smoothed Data
 percentile_range = 3  # How much the "area" around the line covers, in percentiles
 
 # Determine the range of prices available in your data
 min_price = filtered_df["price_original"].min()
 max_price = filtered_df["price_original"].max()
 
-# Create a grid of price values spanning the price range
-price_grid = np.linspace(min_price, max_price, n_grid_points)
+###### The grid
+# Define breakpoints (adjust these based on your data)
+low_break = 5.0  # Upper bound for low-price resolution
+mid_break = 25.0  # Upper bound for mid-price resolution
+
+# Define the number of points for each segment
+n_points_low = 30  # More points for the low range
+n_points_mid = 30  # Moderate points for the mid range
+n_points_high = 30  # Fewer points for the high range
+
+# Create piecewise linear grids
+price_grid_low = np.linspace(min_price, low_break, n_points_low, endpoint=False)
+price_grid_mid = np.linspace(low_break, mid_break, n_points_mid, endpoint=False)
+price_grid_high = np.linspace(mid_break, max_price, n_points_high)
+
+# Combine them into a single grid
+price_grid = np.concatenate([price_grid_low, price_grid_mid, price_grid_high])
 
 # Lists to store the computed statistics for each grid point
 mean_ratios = []
@@ -282,11 +294,10 @@ for p in price_grid:
 
 # plot the data
 fig, ax = plt.subplots(figsize=(12, 6))
-# ax.plot(price_grid, smoothed_mean_ratios, color="red", lw=2, label="Smoothed Mean Review Ratio")
-ax.plot(price_grid, mean_ratios, color="red", alpha=0.5, label="Original Data")
-ax.fill_between(price_grid, lower_percentiles, upper_percentiles, color="lightblue", alpha=0.5, label="25th-75th Percentile")
+ax.plot(price_grid, mean_ratios, color="red", alpha=0.5, label="Weighted Average Score")
+ax.fill_between(price_grid, lower_percentiles, upper_percentiles, color="lightblue", alpha=0.5, label=f"±{percentile_range} Percentiles")
 ax.set_xlabel("Launch Price (USD)")
 ax.set_ylabel("Steam Positive Review Ratio")
-ax.set_title("Sliding Window Analysis with Smoothed Data")
+ax.set_title("Steam Positive Review Ratio by Launch Price")
 ax.legend()
 st.pyplot(fig)
