@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import streamlit as st
-from utils import load_main_dataset
+from utils import load_main_dataset, triangular_weighted_mean
 
 # Load Data
 df = load_main_dataset()
@@ -53,6 +53,9 @@ if df is None or df.empty:
     st.warning(f"Data could be loaded. Please ensure the path is correct and the data is available.")
     st.stop()
 
+##############################
+# Sidebar Options
+##############################
 st.sidebar.title("Filters")
 # Genre options with counts (sorted alphabetically)
 genre_counts = df["genres"].explode().value_counts()
@@ -94,7 +97,9 @@ price_range = st.sidebar.slider("Select Price Range", 0, 120, (0, 100))
 
 filtered_df = filtered_df[(filtered_df["price_original"] >= price_range[0]) & (filtered_df["price_original"] <= price_range[1])]
 
-
+##############################
+# Dynamic page header
+##############################
 # Plot Histogram + Scaled KDE with Log Y-Axis
 st.write("### Price Distribution of Games")
 genre_string = selected_genre_display.split(" (")[0] if selected_genre != "All" else "All"
@@ -108,9 +113,9 @@ if filtered_df.empty:
     st.warning("No data available for the selected filters. Please adjust the filters.")
     st.stop()
 
-############################################################
-# 1. Number of releases by price
-############################################################
+##############################
+# 1 - Total Playerbase by price
+##############################
 # Histogram (bars)
 fig, ax = plt.subplots(figsize=(12, 6))
 hist_values, bin_edges, _ = ax.hist(filtered_df["price_original"], bins=num_bins, alpha=0.6, color="blue", edgecolor="black")
@@ -146,12 +151,16 @@ ax.legend()
 st.pyplot(fig)
 
 
-############################################################
-# 2. Total Playerbase by price
-############################################################
+##############################
+# 2 - Total Estimated Owners by price and Gross Revenue by price
+##############################
 
 
 def plot_weighted_histogram(filtered_df, price_range, num_bins, weight_column, ylabel, title):
+    """ "
+    Plots a histogram using the "sum of X" as the weight for each bin
+    E.g. get the sum of game owners by year of release _rather than_ the _count_ of these games
+    """
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # Copy the filtered DataFrame and remove NA values in the weight column
@@ -179,3 +188,105 @@ plot_weighted_histogram(filtered_df, price_range, num_bins, weight_column="estim
 
 # Graph 2: Gross revenue (estimated_gross_revenue_boxleiter)
 plot_weighted_histogram(filtered_df, price_range, num_bins, weight_column="estimated_gross_revenue_boxleiter", ylabel="Total Estimated Gross Revenue", title="Estimated Gross Revenue by Launch Price")
+
+
+##############################
+# 3 - Impact of launch price on steam_positive_review_ratio
+##############################
+# Define the custom bins and corresponding labels
+bins = [-0.001, 0.001, 1, 5, 10, 20, 30, 45, 60, np.inf]
+labels = ["0", "0.01-1", "1-5", "5-10", "10-20", "20-30", "30-45", "45-60", "60+"]
+
+# Create the price bin column. (cut assigns a bin label to each row based on the corresponding price)
+filtered_df["price_bin"] = pd.cut(filtered_df["price_original"], bins=bins, labels=labels)
+
+# Group by the new price bin label, and sum up the positive and negative reviews for each group
+grouped = filtered_df.groupby("price_bin").agg({"steam_positive_reviews": "sum", "steam_negative_reviews": "sum"}).reset_index()
+
+# Calculate the ratio of positive reviews
+grouped["steam_positive_review_ratio"] = grouped["steam_positive_reviews"] / (grouped["steam_positive_reviews"] + grouped["steam_negative_reviews"])
+
+# Compute the overall positive review ratio for the entire dataset to make the histogram relative instead of absolute
+total_positive = filtered_df["steam_positive_reviews"].sum()
+total_negative = filtered_df["steam_negative_reviews"].sum()
+overall_ratio = total_positive / (total_positive + total_negative)
+
+# difference relative to the overall mean for each group
+grouped["ratio_diff"] = grouped["steam_positive_review_ratio"] - overall_ratio
+
+# Set colors based on ratio_diff
+colors = grouped["ratio_diff"].apply(lambda x: "green" if x >= 0 else "red")
+
+# Plot the thing
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.bar(grouped["price_bin"], grouped["ratio_diff"], color=colors, edgecolor="black")
+ax.axhline(0, color="black", lw=1)  # Reference line at zero
+
+ax.set_xlabel("Launch Price Bin")
+ax.set_ylabel("Difference to Overall Positive Review Ratio")
+ax.set_title("Effect of Launch Price on Review Scores")
+st.pyplot(fig)
+
+
+#################################################################
+#################################################################
+#################################################################
+
+
+# Configurable grid parameters
+n_grid_points = 50  # Number of points in the price grid
+percentile_range = 3  # How much the "area" around the line covers, in percentiles
+
+# Determine the range of prices available in your data
+min_price = filtered_df["price_original"].min()
+max_price = filtered_df["price_original"].max()
+
+# Create a grid of price values spanning the price range
+price_grid = np.linspace(min_price, max_price, n_grid_points)
+
+# Lists to store the computed statistics for each grid point
+mean_ratios = []
+lower_percentiles = []
+upper_percentiles = []
+
+# Get the median steam_positive_review_ratio as a whole
+mean_positive_ratio = filtered_df["steam_positive_review_ratio"].dropna().mean()
+
+# Introduce a "difference to mean"
+filtered_df["ratio_diff"] = filtered_df["steam_positive_review_ratio"] - mean_positive_ratio
+
+
+# Loop over each grid price and compute the desired statistics using a dynamic window
+for p in price_grid:
+    # Calculate the statistics if there is any data in the window
+    # current_window = max(0.2 * p, 0.80)
+    current_window = 0.7 + 0.15 * p
+    mean_ratio = triangular_weighted_mean(filtered_df, "steam_positive_review_ratio", "price_original", p, current_window)
+    mean_ratios.append(mean_ratio)
+
+    # Do the percentiles
+    window_df = filtered_df[(filtered_df["price_original"] >= p - current_window) & (filtered_df["price_original"] <= p + current_window)]
+
+    # Calculate the distance from median to +/- percentile_range
+    median = window_df["steam_positive_review_ratio"].median()
+
+    # 50 + percentile_range percentile miunus the median
+    distance_up = np.percentile(window_df["steam_positive_review_ratio"].dropna(), 50 + percentile_range) - median
+    distance_down = median - np.percentile(window_df["steam_positive_review_ratio"].dropna(), 50 - percentile_range)
+
+    lower_bound = mean_ratio - distance_down
+    upper_bound = mean_ratio + distance_up
+    lower_percentiles.append(lower_bound)
+    upper_percentiles.append(upper_bound)
+
+
+# plot the data
+fig, ax = plt.subplots(figsize=(12, 6))
+# ax.plot(price_grid, smoothed_mean_ratios, color="red", lw=2, label="Smoothed Mean Review Ratio")
+ax.plot(price_grid, mean_ratios, color="red", alpha=0.5, label="Original Data")
+ax.fill_between(price_grid, lower_percentiles, upper_percentiles, color="lightblue", alpha=0.5, label="25th-75th Percentile")
+ax.set_xlabel("Launch Price (USD)")
+ax.set_ylabel("Steam Positive Review Ratio")
+ax.set_title("Sliding Window Analysis with Smoothed Data")
+ax.legend()
+st.pyplot(fig)
