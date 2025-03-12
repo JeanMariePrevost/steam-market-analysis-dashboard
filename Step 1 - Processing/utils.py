@@ -9,15 +9,42 @@ def load_main_dataset() -> pd.DataFrame:
     Returns None if an error occurs.
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-    # parent_dir = os.path.dirname(script_dir)  # Get the parent directory of the script directory
     data_path = f"{script_dir}\\preprocessed_output\\combined_df_preprocessed_dense.parquet"
 
-    # Debug, resolve path and print it, and whether the file exists
-    print(os.path.abspath(data_path))
-    print(os.path.exists(data_path))
+    return load_dataset(data_path)
 
+
+def load_feature_engineered_dataset_with_na() -> pd.DataFrame:
+    """
+    Load the NA-tolerant feature-engineered data from the parquet file.
+    This version retains rows with missing values and does not impute anything.
+    Returns None if an error occurs.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
+    data_path = f"{script_dir}\\feature_engineered_output\\processed_allow_na.csv"
+
+    return load_dataset(data_path)
+
+
+def load_feature_engineered_dataset_no_na() -> pd.DataFrame:
+    """
+    Load the "no NA" feature-engineered data from the parquet file.
+    This version imputes missing values in various ways.
+    Returns None if an error occurs.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
+    data_path = f"{script_dir}\\feature_engineered_output\\processed_no_na.csv"
+
+    return load_dataset(data_path)
+
+
+def load_dataset(path: str) -> pd.DataFrame:
+    """
+    Load a dataset from a file.
+    Returns None if an error occurs.
+    """
     try:
-        df = pd.read_parquet(data_path)
+        df = pd.read_parquet(path)
         return df
     except Exception as e:
         print(f"An error occurred while reading the data: {e}")
@@ -179,28 +206,13 @@ def triangular_weighted_mean(df, value_column, selector_column, center, window_s
     # Keep only the rows for which the selector_column is within the window
     df = df[(df[selector_column] >= center - window_size) & (df[selector_column] <= center + window_size)]
 
-    # print(len(df))
-
     # Compute the triangular weights
     df["distance"] = np.abs(df[selector_column] - center)
     df["weights"] = 1 - df["distance"] / window_size
 
-    # Debug: Print like 20 random selector_column -> weight pairs
-    # print(df.sample(20, replace=True)[[selector_column, "weights"]])
-
     # If no weights are positive, return np.nan to avoid division by zero
     if df["weights"].sum() == 0:
         return np.nan
-
-    # # Debug the rest step by step
-    # print(df[value_column].head())
-    # print(weights)
-    # # Check the shapes
-    # print(df[value_column].shape)
-    # print(weights.shape)
-    # print(df[value_column].dropna().shape)
-    # print(weights.dropna().shape)
-    # print(np.average(df[value_column], weights=weights))
 
     # Compute and return the weighted average
     return np.average(df[value_column], weights=df["weights"])
