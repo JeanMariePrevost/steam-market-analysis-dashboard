@@ -9,7 +9,9 @@ import pandas as pd
 import numpy as np
 import os
 import subprocess
-import ast  # For safely converting string representations of lists
+import ast
+
+from tqdm import tqdm
 
 
 # Define and create output directory if it doesn't exist
@@ -94,7 +96,8 @@ def enforce_datetime_column(df, column_name):
         raise ValueError(f"Invalid date format in {column_name}: {repr(value)}")
 
     # Apply the parsing function
-    df[column_name] = df[column_name].map(try_parsing_date)
+    print(f"Normalizing {column_name}...")
+    df[column_name] = df[column_name].progress_map(try_parsing_date)
 
     # Ensure the column is explicitly datetime64[ns]
     df[column_name] = pd.to_datetime(df[column_name], errors="coerce")
@@ -138,7 +141,8 @@ def normalize_lists_string_values(df, column_name, force_lowercase=True, remove_
             value_as_list.sort()
         return value_as_list
 
-    df[column_name] = df[column_name].map(normalize_cell)
+    print(f"Normalizing {column_name}...")
+    df[column_name] = df[column_name].progress_map(normalize_cell)
     print(f"{column_name} fully normalized ✅")
 
 
@@ -318,6 +322,7 @@ def normalize_datetime_column(df, column_name):
 # Cleaning begins here
 ##########################################################################################################################
 ##########################################################################################################################
+tqdm.pandas()
 df = pd.read_csv(source_csv_path)
 
 ####################################################################
@@ -392,7 +397,7 @@ df.rename(columns={"positive": "steam_positive_reviews"}, inplace=True)
 
 # release_date stuff (we have YYYY-MM-DD format, "Feb 27, 2018" format, some with time (2020-04-05 00:00:00), and "Not Released", "coming_soon" and "unknown")...
 # First, extract "is_released" bool column from "release_date"
-df["is_released"] = df["release_date"].map(lambda x: isinstance(x, str) and x.lower() not in ["not released", "coming soon"])
+df["is_released"] = df["release_date"].progress_map(lambda x: isinstance(x, str) and x.lower() not in ["not released", "coming soon"])
 
 # steam_deck
 df.rename(columns={"steam_deck": "runs_on_steam_deck"}, inplace=True)
@@ -466,6 +471,7 @@ enforce_float_or_nan_column(df, "price_latest")
 enforce_float_or_nan_column(df, "price_original")
 
 # Cross-populate prices columns where one is missing, as current or original price should be a good proxy of the other
+print("Cross-populating price columns...")
 df.loc[df["price_latest"].isna(), "price_latest"] = df["price_original"]
 df.loc[df["price_original"].isna(), "price_original"] = df["price_latest"]
 
@@ -490,6 +496,7 @@ def replace_in_list(lst, before, after):
 
 
 # Apply the function with "rogue-like" -> "roguelike"
+print("Fixing pseudo-duplicated tags...")
 df["tags"] = df["tags"].map(lambda lst: replace_in_list(lst, "base building", "base-building"))
 df["tags"] = df["tags"].map(lambda lst: replace_in_list(lst, "dystopian ", "dystopian"))
 df["tags"] = df["tags"].map(lambda lst: replace_in_list(lst, "parody ", "parody"))
@@ -568,8 +575,11 @@ df.drop(columns=["temp_scale_factor", "temp_review_inflation_factor", "temp_comm
 # Implements heuristics described in the Boxleiter method's modifications in regards to game reviews and age influencing the degree of discount applied
 
 # First, calculate an "average sale discount" based on age (from current year) and negative review ratio
-most_recent_year = df["release_year"].max()
-df["years_since_release"] = most_recent_year - df["release_year"]
+# most_recent_year = df["release_year"].max()
+# df["years_since_release"] = most_recent_year - df["release_year"]
+# Calculate years_since_release as a float including month (and day) fractions.
+current_date = pd.Timestamp.today()
+df["years_since_release"] = (current_date - df["release_date"]).dt.days / 365.25
 
 # Use `0.5 * np.exp(-b * years_since_release) + 0.3` as the discount factor
 # where b is a the dislike ratio, that determines how quickly the discount decreases with age, from 80% (typical launch discount) down to a semi-arbitrary 30% average discount
@@ -581,18 +591,99 @@ df["discount_factor"] = 0.5 * np.exp(-df["dislike_ratio"] * df["years_since_rele
 df["discount_factor"].fillna(0.8 - 0.3 * df["dislike_ratio"], inplace=True)
 
 ####################################################################
-# Calculate the estimated gross revenue using the Boxleiter method
-df.loc[df["monetization_model"] == "paid", "estimated_gross_revenue_boxleiter"] = (df["estimated_owners_boxleiter"] * df["price_original"] * df["discount_factor"]).round().astype("Int64")
+# Calculate the estimated gross revenue using an estimated LTV and the Boxleiter method
+# For paid titles
+df.loc[df["monetization_model"] == "paid", "estimated_ltarpu"] = (df["price_original"] * df["discount_factor"]).round().astype("float")
 
 # Do the same with a conservative LTV / ARPU for free to play games, but the monetization strategies would play a _massive_ part here
-estimated_ltarpu = 1.0
+base_ltarpu_for_estimate = 1.0
 
-df.loc[df["monetization_model"] == "f2p", "estimated_gross_revenue_boxleiter"] = (df["estimated_owners_boxleiter"] * estimated_ltarpu * df["discount_factor"]).round().astype("Int64")
+# Custom curve created through https://mycurvefit.com/
+# Older games had more time to monetize players, meaning higher LTV
+df["f2p_release_years_score"] = 1.287535 + (0.500978 - 1.287535) / (1 + (df["years_since_release"] / 0.7431369) ** 1.998668)
 
-df.loc[df["monetization_model"] == "free", "estimated_gross_revenue_boxleiter"] = 0
+# Certain tags are known to be more monetizable than others
+# https://rocketbrush.com/blog/most-popular-video-game-genres-in-2024-revenue-statistics-genres-overview
+# https://premortem.games/2024/02/28/based-on-the-data-from-2023-what-genre-of-casual-games-will-perform-well-in-2024/
+# https://www.linkedin.com/pulse/mixing-genres-key-game-monetisation-success-samuel-huber
+
+tags_value_mappings = {
+    "battle royale": 3.0,
+    "card battler": 3.0,
+    "card game": 3.0,
+    "casual": -0.5,
+    "character action game": 0.5,
+    "character customization": 1.0,
+    "competitive": 2.0,
+    "cozy": -0.5,
+    "deckbuilding": 0.5,
+    "e-sports": 3.0,
+    "esports": 3.0,
+    "gambling": 4.0,
+    "games workshop": -0.25,
+    "indie": -0.25,
+    "loot": 0.5,
+    "looter shooter": 0.5,
+    "massively multiplayer": 3.0,
+    "mmorpg": 3.0,
+    "moba": 3.0,
+    "mod": -0.25,
+    "moddable": -0.25,
+    "multiplayer": 1.5,
+    "puzzle": 0.5,
+    "pvp": 3.0,
+    "rpg": 0.5,
+}
+
+
+def compute_tag_scores(tags, mapping=tags_value_mappings, decay=0.25):
+    """
+    Given a list of tags, this function:
+      - Filters the tags based on the provided mapping.
+      - Separates positive and negative tags.
+      - Sorts each group by impact (largest impact first).
+      - Applies a decaying weight (0.25 for each extra tag).
+
+    Returns a dict with:
+      - 'positive': cumulative score from positive tags.
+      - 'negative': cumulative score from negative tags.
+      - 'net': overall score (positive + negative).
+    """
+    pos_values = []
+    neg_values = []
+
+    for tag in tags:
+        if tag in mapping:
+            value = mapping[tag]
+            if value > 0:
+                pos_values.append(value)
+            elif value < 0:
+                neg_values.append(value)
+
+    # Sort positive tags in descending order (largest first).
+    pos_values.sort(reverse=True)
+    # For negatives, sort by absolute value (largest penalty first).
+    neg_values.sort(key=lambda x: abs(x), reverse=True)
+
+    pos_score = sum(val * (decay**i) for i, val in enumerate(pos_values))
+    neg_score = sum(val * (decay**i) for i, val in enumerate(neg_values))
+
+    return 1 + pos_score + neg_score
+
+
+# for each title, go through its df["tags"] and cumulate all the positive and negative tags
+# then apply their value from highest impact to lowest impact, with every extra tag being worth 0.25 of the previous one
+# E.g. if you have "massively multiplayer" and  "mmorpg" (1 and 1), you get 1 + 0.25 = 1.25
+# E.g. if you have "casual", "indie", "cozy" and "moddable" (-0.5, -0.25, -0.5, -0.25), you get -0.5 * 0.25 ^ 0 + -0.5 * 0.25 ^ 1 + -0.25 * 0.25 ^ 2 + -0.25 * 0.25 ^ 3 = -0.64453
+df["f2p_tag_score"] = df["tags"].apply(lambda tags: compute_tag_scores(tags))
+
+df.loc[df["monetization_model"] == "f2p", "estimated_ltarpu"] = base_ltarpu_for_estimate * df["f2p_release_years_score"] * df["f2p_tag_score"]
+df.loc[df["monetization_model"] == "free", "estimated_ltarpu"] = 0
+
+df["estimated_gross_revenue_boxleiter"] = (df["estimated_owners_boxleiter"] * df["estimated_ltarpu"]).round().astype("Int64")
 
 # Drop the temporary columns
-df.drop(columns=["years_since_release", "dislike_ratio", "discount_factor"], inplace=True)
+df.drop(columns=["years_since_release", "dislike_ratio", "discount_factor", "f2p_release_years_score", "f2p_tag_score"], inplace=True)
 
 ####################################################################
 # Data Type Enforcement
@@ -608,6 +699,7 @@ column_type_mapprings = {
     "developers": normalize_lists_string_values,
     "dlc_count": enforce_int_or_nan_column,
     "early_access": enforce_boolean_or_nan_column,
+    "estimated_ltarpu": enforce_float_or_nan_column,
     "estimated_owners_boxleiter": enforce_int_or_nan_column,
     "estimated_gross_revenue_boxleiter": enforce_int_or_nan_column,
     "gamefaqs_difficulty_rating": enforce_string_or_nan_column,
