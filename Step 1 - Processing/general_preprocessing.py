@@ -105,12 +105,6 @@ def enforce_datetime_column(df, column_name):
     print(f"{column_name} fully datetime ✅")
 
 
-def enforce_list_column(df, column_name):
-    """
-    Ensures every cell of a column is a list<string> or [], squashing all invalid values to [].
-    """
-
-
 def normalize_lists_string_values(df, column_name, force_lowercase=True, remove_duplicate_elements=True, sort_elements=True):
     """
     Normalizes all string lists in a column by optionally forcing lowercase and removing duplicates.
@@ -717,7 +711,7 @@ column_type_mapprings = {
     "playtime_median_2_weeks": enforce_float_or_nan_column,
     "price_latest": enforce_float_or_nan_column,
     "price_original": enforce_float_or_nan_column,
-    "publishers": enforce_list_column,
+    "publishers": normalize_lists_string_values,
     "recommendations": enforce_int_or_nan_column,
     "release_date": enforce_datetime_column,
     "release_year": enforce_int_or_nan_column,
