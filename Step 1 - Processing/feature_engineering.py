@@ -218,6 +218,7 @@ allow_na_mappings = {
 
 
 # Work starts here
+tqdm.pandas()
 df = load_main_dataset()
 
 df_no_na = df.copy()

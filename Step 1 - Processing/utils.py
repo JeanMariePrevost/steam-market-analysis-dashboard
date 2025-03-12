@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
+from tqdm import tqdm
 
 
 def load_main_dataset() -> pd.DataFrame:
@@ -163,14 +164,33 @@ def collapse_pseudo_duplicate_games(df: pd.DataFrame) -> pd.DataFrame:
     group_cols = ["name", "release_date"]
 
     # Separate duplicate groups from unique entries to reduce processing.
-    duplicates = df.groupby(group_cols).filter(lambda x: len(x) > 1)
-    singles = df.groupby(group_cols).filter(lambda x: len(x) == 1)
+    print("Grouping by name and release date...")
+    groups = df.groupby(group_cols)
+
+    # This section has been reworked to be vectorized, though a little less readable imo
+    # print("Identifying duplicates...")
+    # duplicates = groups.filter(lambda x: len(x) > 1)
+    # print("Identifying unique entries...")
+    # singles = groups.filter(lambda x: len(x) == 1)
+    # =======================================================
+    print("Identifying duplicates...")
+    df["group_count"] = df.groupby(group_cols)[group_cols[0]].transform("size")
+
+    # Vectorized filtering for duplicates and singles
+    duplicates = df[df["group_count"] > 1].copy()
+    singles = df[df["group_count"] == 1].copy()
+
+    # Optionally, drop the helper column
+    df.drop("group_count", axis=1, inplace=True)
+    # =======================================================
 
     # Score duplicates
-    duplicates_scored = duplicates.groupby(group_cols).apply(compute_group_scores).reset_index(drop=True)
+    print("Scoring duplicates...")
+    duplicates_scored = duplicates.groupby(group_cols).progress_apply(compute_group_scores).reset_index(drop=True)
 
     # Squash them by overwriting lower-score values with higher-score values progressively (which lets us keep non-null values the better candidates might not have)
-    collapsed_duplicates = duplicates_scored.groupby(group_cols).apply(collapse_group_rows).reset_index(drop=True)
+    print("Collapsing duplicates...")
+    collapsed_duplicates = duplicates_scored.groupby(group_cols).progress_apply(collapse_group_rows).reset_index(drop=True)
 
     # Combine the unique entries with now collapsed duplicates.
     final_df = pd.concat([singles, collapsed_duplicates]).reset_index(drop=True)
