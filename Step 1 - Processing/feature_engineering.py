@@ -198,7 +198,7 @@ allow_na_mappings = {
     "playtime_median_2_weeks": None,
     "price_latest": None,
     "price_original": None,
-    "publishers": None,
+    "publishers": first_of_list,
     "recommendations": None,
     "release_date": None,
     "release_year": None,
@@ -229,8 +229,6 @@ df_allow_na = df.copy()
 # Apply mappings
 for column_from_df in df.columns:
     print(f"Processing column {column_from_df}...")
-    if column_from_df == "genres":
-        print("genres")
 
     # Apply the NA-intolerant mappings
     if column_from_df in fill_na_mappings:
