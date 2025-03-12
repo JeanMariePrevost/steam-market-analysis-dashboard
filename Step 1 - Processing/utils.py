@@ -22,7 +22,7 @@ def load_feature_engineered_dataset_with_na() -> pd.DataFrame:
     Returns None if an error occurs.
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-    data_path = f"{script_dir}\\feature_engineered_output\\processed_allow_na.csv"
+    data_path = f"{script_dir}\\feature_engineered_output\\processed_allow_na.parquet"
 
     return load_dataset(data_path)
 
@@ -34,9 +34,14 @@ def load_feature_engineered_dataset_no_na() -> pd.DataFrame:
     Returns None if an error occurs.
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-    data_path = f"{script_dir}\\feature_engineered_output\\processed_no_na.csv"
+    data_path = f"{script_dir}\\feature_engineered_output\\processed_no_na.parquet"
 
-    return load_dataset(data_path)
+    df = load_dataset(data_path)
+    if df is not None:
+        if df.isnull().sum().sum() > 0:
+            raise ValueError("The dataset contains missing values. Double-check the preprocessing steps leading to processed_no_na.parquet.")
+
+    return df
 
 
 def load_dataset(path: str) -> pd.DataFrame:
