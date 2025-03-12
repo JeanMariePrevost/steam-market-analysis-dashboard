@@ -253,6 +253,12 @@ for column_from_df in df.columns:
 # Drop _all_ rows that have _any_ NA values left in the first set
 df_no_na = df_no_na.dropna()
 
+print("Df contains NaNs: ", df_no_na.isna().sum().sum() > 0)
+
+# If any, show where the first is
+if df_no_na.isna().sum().sum() > 0:
+    print(df_no_na.isna().sum().idxmax())
+
 
 ###################################################################################
 # One-Hot Encoding
@@ -294,11 +300,7 @@ def explode_list_to_one_hot(reference_df, column_name, prefix_for_exploded_colum
     one_hot_df = pd.DataFrame(0, index=reference_df.index, columns=[f"{prefix_for_exploded_columns}{val}" for val in unique_values])
 
     # # Populate the one-hot DataFrame: for each row, mark 1 if the unique value is present in the list
-    # for idx, row in reference_df[column_name].items():
-    #     for val in row:
-    #         one_hot_df.loc[idx, f"{prefix_for_exploded_columns}{val}"] = 1
-
-    # Wrap the iterator with tqdm for a progress bar.
+    # tqdm is used to show a progress bar
     for idx, row in tqdm(reference_df[column_name].items(), total=len(reference_df)):
         for val in row:
             one_hot_df.loc[idx, f"{prefix_for_exploded_columns}{val}"] = 1
@@ -310,16 +312,7 @@ print("Exploding columns to one-hot encoding... This may take a while...")
 for column, prefix in columns_to_explode.items():
     print(f"Exploding column [{column}] with prefix [{prefix}]...")
 
-    # # Explode the column for the NA-intolerant set
-    # print("Exploding NA-intolerant set...")
-    # exploded_df_no_na = explode_list_to_one_hot(df_no_na, column, prefix)
-    # df_no_na = pd.concat([df_no_na, exploded_df_no_na], axis=1)
-
-    # # Explode the column for the NA-tolerant set
-    # print("Exploding NA-tolerant set...")
-    # exploded_df_allow_na = explode_list_to_one_hot(df_allow_na, column, prefix)
-    # df_allow_na = pd.concat([df_allow_na, exploded_df_allow_na], axis=1)
-
+    # # Explode the "list columns" into one-hot encoded columns
     exploded_column_df = explode_list_to_one_hot(df, column, prefix)
     df_no_na = pd.concat([df_no_na, exploded_column_df], axis=1)
     df_allow_na = pd.concat([df_allow_na, exploded_column_df], axis=1)
@@ -328,6 +321,16 @@ for column, prefix in columns_to_explode.items():
 
 
 print("One-hot encoding complete ✅")
+
+# Drop _all_ rows that have _any_ NA values left in the first set
+df_no_na = df_no_na.dropna()
+
+
+print("Df contains NaNs: ", df_no_na.isna().sum().sum() > 0)
+
+# If any, show where the first is
+if df_no_na.isna().sum().sum() > 0:
+    print(df_no_na.isna().sum().idxmax())
 
 ###################################################################################
 # Saving
