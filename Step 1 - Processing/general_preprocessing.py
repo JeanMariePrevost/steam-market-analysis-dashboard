@@ -683,7 +683,6 @@ df = collapse_pseudo_duplicate_games(df)
 df = df.reindex(sorted(df.columns), axis=1)
 
 df.index.name = "appid"  # Ensure the index name is correct
-# df.reset_index(inplace=True)
 
 # Save results so far to a CSV file
 output_filename = "combined_df_preprocessed"

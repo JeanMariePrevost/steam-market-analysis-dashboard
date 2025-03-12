@@ -129,6 +129,8 @@ def collapse_pseudo_duplicate_games(df: pd.DataFrame) -> pd.DataFrame:
         return accum
 
     print("Collapsing pseudo-duplicate entries... This may take a while...")
+    # Reset index to make sure it's treated as a other columns such that appid is kept
+    df = df.reset_index()
 
     # Group by ["name", "release_date"] to identify pseudo-duplicates.
     group_cols = ["name", "release_date"]
@@ -148,6 +150,9 @@ def collapse_pseudo_duplicate_games(df: pd.DataFrame) -> pd.DataFrame:
 
     # Drop temporary columns used for scoring.
     final_df = final_df.drop(columns=["score_reviews", "score_recommendations", "score_tags", "score_genres", "score_languages", "total_score"])
+
+    # set 'appid' as the index again if needed:
+    final_df = final_df.set_index("appid")
 
     return final_df
 
