@@ -537,6 +537,12 @@ df_set9["linux"] = df_set9["platforms"].apply(lambda x: "linux" in x)
 # Fix the weird "owners" column format that has ranges like "10,000,000 .. 20,000,000"
 df_set9["owners"] = df_set9["owners"].apply(lambda x: x.replace(",", "").replace(" .. ", " - ") if isinstance(x, str) else x)
 
+# Exclude multiple faulty "initialprice" values that did not have their decimal in the right place (e.g. 8999.0 instead of 89.99)
+# Cutoff set at 150.0 after manual verification of multiple titles
+numeric_prices = pd.to_numeric(df_set9["initialprice"], errors="coerce")  # First, convert the column to numeric, coercing errors to NaN
+mask = numeric_prices.isna() | (numeric_prices >= 150)  # Create a mask: True if the value is NaN or (if numeric) greater than or equal to 150.
+df_set9.loc[mask, "initialprice"] = np.nan  # Set the values in the "initialprice" column to NaN where the mask is True
+
 
 mappings = [
     ("id", "appid", None),
