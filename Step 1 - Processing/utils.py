@@ -163,11 +163,10 @@ def collapse_pseudo_duplicate_games(df: pd.DataFrame) -> pd.DataFrame:
     # Group by ["name", "release_date"] to identify pseudo-duplicates.
     group_cols = ["name", "release_date"]
 
-    # Separate duplicate groups from unique entries to reduce processing.
-    print("Grouping by name and release date...")
-    groups = df.groupby(group_cols)
-
     # This section has been reworked to be vectorized, though a little less readable imo
+    # # Separate duplicate groups from unique entries to reduce processing.
+    # print("Grouping by name and release date...")
+    # groups = df.groupby(group_cols)
     # print("Identifying duplicates...")
     # duplicates = groups.filter(lambda x: len(x) > 1)
     # print("Identifying unique entries...")
@@ -179,9 +178,6 @@ def collapse_pseudo_duplicate_games(df: pd.DataFrame) -> pd.DataFrame:
     # Vectorized filtering for duplicates and singles
     duplicates = df[df["group_count"] > 1].copy()
     singles = df[df["group_count"] == 1].copy()
-
-    # Optionally, drop the helper column
-    df.drop("group_count", axis=1, inplace=True)
     # =======================================================
 
     # Score duplicates
@@ -200,6 +196,9 @@ def collapse_pseudo_duplicate_games(df: pd.DataFrame) -> pd.DataFrame:
 
     # set 'appid' as the index again if needed:
     final_df = final_df.set_index("appid")
+
+    # drop the helper column
+    final_df = final_df.drop(columns=["group_count"])
 
     return final_df
 
