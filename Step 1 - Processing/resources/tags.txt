@@ -1,0 +1,455 @@
+1980s 
+1990's 
+2.5d
+2d
+2d fighter 
+2d platformer 
+360 video 
+3d 
+3d fighter 
+3d platformer 
+3d vision 
+4 player local 
+4x
+6dof
+8-bit music 
+abstract 
+action 
+action roguelike 
+action rpg 
+action rts 
+action-adventure 
+addictive 
+adventure
+agriculture 
+aliens 
+alternate history 
+ambient 
+america 
+animation & modeling
+anime 
+arcade 
+archery 
+arena shooter 
+artificial intelligence 
+assassin 
+asymmetric vr 
+asynchronous multiplayer
+atmospheric 
+atv 
+audio production 
+auto battler 
+automation 
+automobile sim 
+base-building 
+baseball 
+based on a novel 
+basketball 
+batman 
+battle royale
+beat 'em up 
+beautiful
+benchmark 
+bikes 
+birds 
+blood 
+bmx
+board game
+boomer shooter
+boss rush
+bowling 
+boxing 
+building 
+bullet hell 
+bullet time
+capitalism 
+card battler 
+card game 
+cartoon 
+cartoony 
+casual 
+cats 
+character action game 
+character customization 
+chess 
+choices matter 
+choose your own adventure 
+cinematic 
+city builder
+class-based 
+classic 
+clicker 
+co-op 
+co-op campaign 
+coding 
+cold war 
+collectathon
+colony sim 
+colorful 
+combat
+combat racing
+comedy 
+comic book 
+competitive 
+conspiracy 
+controller 
+conversation 
+cooking 
+cozy
+crafting 
+creature collector
+cricket 
+crime 
+crowdfunded 
+crpg 
+cult classic 
+cute
+cyberpunk
+cycling 
+dark
+dark comedy 
+dark fantasy 
+dark humor 
+dating sim 
+deckbuilding 
+demons 
+design & illustration 
+destruction 
+detective 
+difficult 
+dinosaurs 
+diplomacy 
+documentary 
+dog
+dragons 
+drama 
+driving 
+dungeon crawler 
+dungeons & dragons 
+dwarf
+dynamic narration
+dystopian 
+e-sports
+early access 
+economy 
+education 
+electronic 
+electronic music 
+elf 
+emotional 
+epic 
+episodic 
+escape room 
+esports 
+experience
+experimental 
+exploration 
+extraction shooter 
+faith 
+family friendly 
+fantasy 
+farming 
+farming sim 
+fast-paced 
+feature film
+female protagonist 
+fighting 
+first-person 
+fishing 
+flight
+fmv 
+football 
+football (american) 
+football (soccer) 
+foreign 
+fox 
+fps 
+free to play 
+funny 
+futuristic 
+gambling 
+game development 
+gamemaker 
+games workshop 
+gaming 
+god game 
+golf 
+gore
+gothic 
+grand strategy
+great soundtrack 
+grid-based movement 
+gun customization 
+hack and slash 
+hacking 
+hand-drawn 
+hardware 
+heist 
+hentai 
+hero shooter 
+hex grid 
+hidden object 
+historical
+hobby sim 
+hockey 
+horror
+horses 
+hunting 
+idler 
+illuminati 
+immersive 
+immersive sim 
+indie 
+instrumental music
+intentionally awkward controls
+interactive fiction 
+inventory management
+investigation
+isometric
+jet 
+job simulator 
+jrpg 
+jump scare
+kickstarter 
+lara croft 
+lego
+lemmings 
+level editor 
+lgbtq+ 
+life sim 
+linear 
+local co-op 
+local multiplayer 
+logic 
+loot 
+looter shooter 
+lore-rich 
+lovecraftian 
+magic 
+mahjong 
+management 
+mars 
+martial arts
+massively multiplayer
+masterpiece 
+match 3 
+mature 
+mechs 
+medical sim 
+medieval 
+memes 
+metroidvania 
+military 
+mini golf 
+minigames 
+minimalist 
+mining 
+mmorpg 
+moba 
+mod
+moddable 
+modern 
+motocross
+motorbike 
+mouse only
+movie 
+multiplayer 
+multiple endings 
+music 
+music-based procedural generation 
+musou 
+mystery 
+mystery dungeon 
+mythology 
+narration 
+narrative
+nature 
+naval 
+naval combat 
+ninja
+noir 
+nonlinear 
+nostalgia 
+nsfw 
+nudity 
+offroad 
+old school 
+on-rails shooter
+online co-op 
+open world 
+open world survival craft 
+otome
+outbreak sim 
+parkour 
+parody
+party 
+party game
+party-based rpg 
+perma death 
+philisophical 
+philosophical 
+photo editing 
+physics 
+pinball 
+pirates 
+pixel graphics 
+platformer 
+point & click 
+political 
+political sim
+politics 
+pool 
+post-apocalyptic
+precision platformer 
+procedural generation
+programming
+psychedelic 
+psychological 
+psychological horror 
+puzzle
+puzzle platformer 
+pve
+pvp 
+quick-time events 
+racing 
+real time tactics
+real-time
+real-time with pause 
+realistic 
+reboot 
+relaxing 
+remake 
+replay value 
+resource management 
+retro 
+rhythm
+robots 
+rock music 
+roguelike 
+roguelike deckbuilder 
+roguelite
+roguevania 
+romance 
+rome
+rpg 
+rpgmaker 
+rts 
+rugby 
+runner 
+sailing 
+sandbox 
+satire 
+sci-fi 
+science 
+score attack 
+sequel
+sexual content
+shoot 'em up
+shooter 
+shop keeper 
+short 
+side scroller
+silent protagonist 
+simulation 
+singleplayer 
+skateboarding 
+skating 
+skiing 
+sniper 
+snooker]
+snow 
+snowboarding 
+soccer
+social deduction 
+software 
+software training 
+sokoban 
+solitaire 
+souls-like 
+soundtrack 
+space 
+space sim 
+spaceships 
+spectacle fighter 
+spelling
+split screen
+sports
+star wars 
+stealth 
+steam machine 
+steampunk
+story rich 
+strategy
+strategy rpg 
+stylized 
+submarine 
+superhero 
+supernatural 
+surreal 
+survival 
+survival horror
+swordplay 
+tabletop 
+tactical 
+tactical rpg 
+tanks 
+team-based 
+tennis 
+text-based 
+third person 
+third-person shooter 
+thriller
+tile-matching 
+time attack
+time management
+time manipulation 
+time travel
+top-down 
+top-down shooter
+touch-friendly 
+tower defense 
+trackir 
+trading
+trading card game 
+traditional roguelike 
+trains 
+transhumanism 
+transportation 
+trivia 
+turn-based 
+turn-based combat 
+turn-based strategy 
+turn-based tactics 
+tutorial
+twin stick shooter 
+typing
+underground 
+underwater 
+unforgiving
+utilities 
+vampire 
+vehicular combat
+video production 
+vikings 
+villain protagonist 
+violent 
+visual novel 
+voice control 
+volleyball
+voxel 
+vr 
+vr only 
+walking simulator 
+war 
+wargame 
+warhammer 40k 
+web publishing
+well-written 
+werewolves 
+western 
+wholesome 
+word game 
+world war i 
+world war ii 
+wrestling 
+zombies 
