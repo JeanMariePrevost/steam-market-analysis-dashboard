@@ -168,6 +168,13 @@ fig4, ax4 = plt.subplots(figsize=(10, 5))
 ax4.plot(owners_stats["release_year"], owners_stats["median"], marker="o", linewidth=2, label="Median Owners")
 # ax4.plot(owners_stats["release_year"], owners_stats["mean"], marker="s", linewidth=2, label="Average Owners")
 
+# Keep only the top 10% of titles in a new dataframe
+top_10_percent = filtered_df[filtered_df["estimated_owners_boxleiter"] > filtered_df["estimated_owners_boxleiter"].quantile(0.9)]
+top_10_percent = top_10_percent.groupby("release_year")["estimated_owners_boxleiter"].median().reset_index()
+# Plot the top 10% of titles
+ax4.plot(top_10_percent["release_year"], top_10_percent["estimated_owners_boxleiter"], marker="s", linewidth=2, label="Median owners (top 10% titles only)", color="red")
+
+
 # Set labels and title
 ax4.set_xlabel("Release Year")
 ax4.set_ylabel("Estimated Owners")
