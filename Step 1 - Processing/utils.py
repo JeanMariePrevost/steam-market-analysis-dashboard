@@ -1,3 +1,4 @@
+from scipy.stats import norm
 import numpy as np
 import pandas as pd
 import os
@@ -240,3 +241,43 @@ def triangular_weighted_mean(df, value_column, selector_column, center, window_s
 
     # Compute and return the weighted average
     return np.average(df[value_column], weights=df["weights"])
+
+
+def binom_confidence_interval(successes, totals, confidence=0.95):
+    """
+    Calculate the confidence interval for a binomial proportion (i.e. rates that an event occurs or not, "binary" outcomes).
+
+    Parameters:
+        successes (np.ndarray or pd.Series): Array of success counts.
+        totals (np.ndarray or pd.Series): Array of total counts.
+        confidence (float): Confidence level (default 0.95).
+
+    Returns:
+        lower_bounds, upper_bounds (tuple of np.ndarray): Arrays of lower and upper confidence bounds.
+
+    Example usage (scalar):
+        df["ci_lower"], df["ci_upper"] = binom_confidence_interval(df["rpg_releases_count"], df["total_releases_count"])
+    """
+    # Convert to numpy arrays
+    successes = np.asarray(successes, dtype=float)
+    totals = np.asarray(totals, dtype=float)
+
+    # Calculate the proportion of successes
+    # Avoid division by zero; when total == 0, set proportion to 0
+    p_hat = np.divide(successes, totals, out=np.zeros_like(successes), where=totals > 0)
+
+    # Calculate the alpha level from the confidence level
+    z = norm.ppf(1 - (1 - confidence) / 2)
+
+    # Calculate the standard error
+    se = np.sqrt(np.divide(p_hat * (1 - p_hat), totals, out=np.zeros_like(p_hat), where=totals > 0))
+
+    # Calculate the confidence interval bounds
+    lower_bounds = p_hat - z * se
+    upper_bounds = p_hat + z * se
+
+    # Keep bounds within [0, 1]
+    lower_bounds = np.clip(lower_bounds, 0, 1)
+    upper_bounds = np.clip(upper_bounds, 0, 1)
+
+    return lower_bounds, upper_bounds
