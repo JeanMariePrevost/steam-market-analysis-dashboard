@@ -594,7 +594,15 @@ base_ltarpu_for_estimate = 1.0
 
 # Custom curve created through https://mycurvefit.com/
 # Older games had more time to monetize players, meaning higher LTV
-df["f2p_release_years_score"] = 1.287535 + (0.500978 - 1.287535) / (1 + (df["years_since_release"] / 0.7431369) ** 1.998668)
+# Tweak it in desmos with the following sigmoidal:
+# a+(b-a)/(1+(x/c)^{d})
+f2p_a = 1.25  # Maximum value, highest point on curve
+f2p_b = 0.6  # Value at intercept
+f2p_c = 0.74  # x value at inflection point, in years
+f2p_d = 2.0  # Steepness of the curve
+
+# df["f2p_release_years_score"] = 1.28 + (0.5 - 1.28) / (1 + (df["years_since_release"] / 0.74) ** 2)
+df["f2p_release_years_score"] = f2p_a + (f2p_b - f2p_a) / (1 + (df["years_since_release"] / f2p_c) ** f2p_d)
 
 # Certain tags are known to be more monetizable than others
 # https://rocketbrush.com/blog/most-popular-video-game-genres-in-2024-revenue-statistics-genres-overview
