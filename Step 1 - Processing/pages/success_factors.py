@@ -213,6 +213,9 @@ def do_controller_support():
     # Replace NaN with "Unknown"
     df_controller_support["controller_support"] = df_controller_support["controller_support"].fillna("unknown")
 
+    # normalize review scores against yearly trends
+    df_controller_support["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_controller_support, "steam_positive_review_ratio", "release_year", method="diff")
+
     # group by controller support values
     df_controller_support = (
         df_controller_support.groupby("controller_support")
@@ -226,18 +229,7 @@ def do_controller_support():
         .reset_index()
     )
 
-    message = """We observe that controller support itself does _not_ seem to have a strong impact on the review score of a game.
-    We suggest an cancelling out of the advantages of controller support by the negative impact of poorly ported games.
-    However, games with unknown controller support score surprisingly higher than those with this information, but this
-    is likely due to the fact that the controller support data is missing for many more recent games, suggesting perhaps
-    an upward shift in review scores over time instead of a direct positive impact of "unknown" controller support:"""
-
-    mean_release_year_for_unknown = df_controller_support[df_controller_support["controller_support"] == "unknown"]["release_year"].mean()
-    mean_release_year_for_known = df_controller_support[df_controller_support["controller_support"] != "unknown"]["release_year"].mean()
-    message += f"\n- Average release year for games with unknown controller support: **{mean_release_year_for_unknown:.2f}**"
-    message += f"\n- Average release year for games with known controller support: **{mean_release_year_for_known:.2f}**"
-
-    st.write(message)
+    st.write("We observe no measurable impact of controller support on the review score of games when controlling for release year:")
 
     # Plot as a bar chart
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -267,10 +259,10 @@ def do_early_access():
     df_early_access = df_early_access[df_early_access["steam_positive_review_ratio"] > 0]
 
     df_early_access["clean_early_access"] = df_early_access["early_access"].dropna()
-    t_stat, p_value = utils.ttest_two_groups(df_early_access, "steam_positive_review_ratio", "clean_early_access")
+    _, p_value = utils.ttest_two_groups(df_early_access, "steam_positive_review_ratio", "clean_early_access")
     # st.write(f"t-statistic: {t_stat:.2f}, p-value: {p_value:.2f}")
 
-    st.write(f"We observe no significant impact on review scores between early access and non-early access games and no strong coorelation (p-value: {p_value:.2f}).")
+    st.write(f"We observe no significant cahnges on review scores from early access status and non-early access games and no real coorelation (p-value: {p_value:.2f}).")
 
     # Convert all early_access values to strings, mapping booleans appropriately
     df_early_access["early_access"] = df_early_access["early_access"].apply(lambda x: "yes" if x is True else ("no" if x is False else "unknown"))
