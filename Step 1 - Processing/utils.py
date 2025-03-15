@@ -433,3 +433,36 @@ def ttest_two_groups(df, numeric_col, cat_col):
     t_stat, p_value = stats.ttest_ind(group1, group2, equal_var=False)
 
     return t_stat, p_value
+
+
+from scipy import stats
+
+
+def anova_categorical(df, numeric_col, cat_col):
+    """
+    Performs a one-way ANOVA to determine if the mean of a numeric column differs significantly
+    across the groups defined by a categorical variable with more than two levels.
+    Note: Drops NaN values, so handle them manually if they have to be included.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing the data.
+        numeric_col (str): The name of the numeric column to test (e.g., "steam_positive_review_ratio").
+        cat_col (str): The name of the categorical column (e.g., "controller_support") which contains multiple groups (e.g., "none", "partial", "full").
+
+    Returns:
+        tuple: A tuple containing the F-statistic and p-value from the one-way ANOVA.
+
+    Example usage:
+        F_stat, p_value = anova_categorical(df, "steam_positive_review_ratio", "controller_support")
+        print(f"F-statistic: {F_stat:.3f}, p-value: {p_value:.3f}")
+    """
+    # Group the data by the categorical column and extract the numeric data for each group
+    groups = [group[numeric_col].dropna() for _, group in df.groupby(cat_col)]
+
+    if len(groups) < 2:
+        raise ValueError(f"Column '{cat_col}' must have at least 2 groups. Found only {len(groups)} group(s).")
+
+    # Perform one-way ANOVA to compare the means across the groups
+    F_stat, p_value = stats.f_oneway(*groups)
+
+    return F_stat, p_value
