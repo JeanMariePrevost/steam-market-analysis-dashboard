@@ -8,6 +8,7 @@ import streamlit as st
 import os
 import matplotlib.ticker as mticker
 import utils
+from scipy.signal import savgol_filter
 
 # Page configuration & custom CSS
 st.set_page_config(page_title="Tags Trends")
@@ -166,47 +167,49 @@ st.write(
     can help us understand how the sentiment or reception of games with this tag has evolved over time."""
 )
 
-percentile_range = 5  # How much the "area" around the line covers, in percentiles
-minimum_review_count = min_review_count  # Minimum number of reviews to consider a game for analysis
-trash_threshold = 0.1  # Filter out "garbage" games to not have an influx of shovelware drag down the average.
+try:
+    percentile_range = 5  # How much the "area" around the line covers, in percentiles
+    minimum_review_count = min_review_count  # Minimum number of reviews to consider a game for analysis
+    trash_threshold = 0.1  # Filter out "garbage" games to not have an influx of shovelware drag down the average.
 
-df_ana2 = df_filtered[df_filtered["steam_total_reviews"] >= minimum_review_count]  # Filter out games with too few reviews
-df_ana2 = df_ana2[df_filtered["steam_positive_review_ratio"] >= trash_threshold]  # Filter out outlier games that are likely trash (below the threshold)
+    df_ana2 = df_filtered[df_filtered["steam_total_reviews"] >= minimum_review_count]  # Filter out games with too few reviews
+    df_ana2 = df_ana2[df_filtered["steam_positive_review_ratio"] >= trash_threshold]  # Filter out outlier games that are likely trash (below the threshold)
 
-# Group the remaining data by release_year and calculate the mean positive review ratio.
-median_reception_by_year = df_ana2.groupby("release_year")["steam_positive_review_ratio"].median().reset_index()
+    # Group the remaining data by release_year and calculate the mean positive review ratio.
+    median_reception_by_year = df_ana2.groupby("release_year")["steam_positive_review_ratio"].median().reset_index()
 
-# Calculate the global median review for that year range
-global_median_review = df_all_in_year_range[df_all_in_year_range["steam_total_reviews"] >= minimum_review_count]["steam_positive_review_ratio"].median()
+    # Calculate the global median review for that year range
+    global_median_review = df_all_in_year_range[df_all_in_year_range["steam_total_reviews"] >= minimum_review_count]["steam_positive_review_ratio"].median()
 
-lower_percentiles = []
-upper_percentiles = []
-for year in median_reception_by_year["release_year"]:
-    year_data = df_ana2[df_ana2["release_year"] == year]
-    lower_percentiles.append(year_data["steam_positive_review_ratio"].quantile(0.5 - (percentile_range / 100)))
-    upper_percentiles.append(year_data["steam_positive_review_ratio"].quantile(0.5 + (percentile_range / 100)))
+    lower_percentiles = []
+    upper_percentiles = []
+    for year in median_reception_by_year["release_year"]:
+        year_data = df_ana2[df_ana2["release_year"] == year]
+        lower_percentiles.append(year_data["steam_positive_review_ratio"].quantile(0.5 - (percentile_range / 100)))
+        upper_percentiles.append(year_data["steam_positive_review_ratio"].quantile(0.5 + (percentile_range / 100)))
 
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(median_reception_by_year["release_year"], median_reception_by_year["steam_positive_review_ratio"], label="Median Positive Review Ratio", marker="o", linestyle="-")
+    ax.fill_between(median_reception_by_year["release_year"], lower_percentiles, upper_percentiles, alpha=0.2, label=f"{percentile_range}% Percentile Range")
 
-# Plot
-fig, ax = plt.subplots(figsize=(10, 6))
-ax.plot(median_reception_by_year["release_year"], median_reception_by_year["steam_positive_review_ratio"], label="Median Positive Review Ratio", marker="o", linestyle="-")
-ax.fill_between(median_reception_by_year["release_year"], lower_percentiles, upper_percentiles, alpha=0.2, label=f"{percentile_range}% Percentile Range")
+    # trend line
+    coeffs = np.polyfit(median_reception_by_year["release_year"], median_reception_by_year["steam_positive_review_ratio"], 2)
+    trend_line = np.poly1d(coeffs)
+    ax.plot(median_reception_by_year["release_year"], trend_line(median_reception_by_year["release_year"]), linestyle="--", color="red", label="Trend Line (Quadratic)")
+    ax.axhline(global_median_review, color="green", linestyle="--", label=f"Global Median Review Score ({global_median_review:.2f})", alpha=0.5)  #  Plot the global median review score for reference
 
-# trend line
-coeffs = np.polyfit(median_reception_by_year["release_year"], median_reception_by_year["steam_positive_review_ratio"], 2)
-trend_line = np.poly1d(coeffs)
-ax.plot(median_reception_by_year["release_year"], trend_line(median_reception_by_year["release_year"]), linestyle="--", color="red", label="Trend Line (Quadratic)")
-ax.axhline(global_median_review, color="green", linestyle="--", label=f"Global Median Review Score ({global_median_review:.2f})", alpha=0.5)  #  Plot the global median review score for reference
+    ax.set_xlabel("Release Year")
+    ax.set_ylabel("Average Steam Positive Review Ratio")
+    ax.set_title(f'Median review score for tag "{selected_tag}"')
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.xaxis.set_minor_locator(MultipleLocator(1))
+    ax.grid(True)
+    ax.legend()
 
-ax.set_xlabel("Release Year")
-ax.set_ylabel("Average Steam Positive Review Ratio")
-ax.set_title(f'Median review score for tag "{selected_tag}"')
-ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-ax.xaxis.set_minor_locator(MultipleLocator(1))
-ax.grid(True)
-ax.legend()
-
-st.pyplot(fig)
+    st.pyplot(fig)
+except Exception as e:
+    st.error(f"Could not create chart for {selected_tag}, most likely due to lack of data. \n\nError message: {e}")
 
 ##############################
 # Analysis 3: Median / percential number of owners through the years
@@ -227,60 +230,62 @@ st.info(
     '**Note**: This analysis relies on the "Boxleiter Method" for estimating the number of owners, which may not be accurate for all games.\n\n[Click here to learn more](https://vginsights.com/insights/article/how-to-estimate-steam-video-game-sales).'
 )
 
+try:
+    df_ana3 = df_filtered[df_filtered["estimated_owners_boxleiter"] > min_owners_count]  # Filter out games with too few owners
+    top_1_percentile = df_ana3["estimated_owners_boxleiter"].quantile(0.99)
+    df_ana3 = df_ana3[df_ana3["estimated_owners_boxleiter"] < top_1_percentile]  # Filter out the top 1% of games, as they are likely outliers
 
-df_ana3 = df_filtered[df_filtered["estimated_owners_boxleiter"] > min_owners_count]  # Filter out games with too few owners
-top_1_percentile = df_ana3["estimated_owners_boxleiter"].quantile(0.99)
-df_ana3 = df_ana3[df_ana3["estimated_owners_boxleiter"] < top_1_percentile]  # Filter out the top 1% of games, as they are likely outliers
+    # Gorup by releasy year and calculate the values for each percentile
+    median_owners_by_year = df_ana3.groupby("release_year")["estimated_owners_boxleiter"].median().reset_index()
 
-# Gorup by releasy year and calculate the values for each percentile
-median_owners_by_year = df_ana3.groupby("release_year")["estimated_owners_boxleiter"].median().reset_index()
+    # add the _count_ of elements in each year
+    median_owners_by_year["count"] = df_ana3.groupby("release_year").size().reset_index()[0]
 
-# add the _count_ of elements in each year
-median_owners_by_year["count"] = df_ana3.groupby("release_year").size().reset_index()[0]
+    # Get confidence intervals through utils
+    df_ana3_confidence_int = utils.median_confidence_intervals(df_ana3, "estimated_owners_boxleiter", "release_year", confidence_area_level)
 
-# Get confidence intervals through utils
-df_ana3_confidence_int = utils.median_confidence_intervals(df_ana3, "estimated_owners_boxleiter", "release_year", confidence_area_level)
+    # Clip the confidence intervals above 0
+    df_ana3_confidence_int["ci_lower"] = df_ana3_confidence_int["ci_lower"].clip(lower=0)
+    df_ana3_confidence_int["ci_upper"] = df_ana3_confidence_int["ci_upper"].clip(lower=0)
 
-# Clip the confidence intervals above 0
-df_ana3_confidence_int["ci_lower"] = df_ana3_confidence_int["ci_lower"].clip(lower=0)
-df_ana3_confidence_int["ci_upper"] = df_ana3_confidence_int["ci_upper"].clip(lower=0)
+    # Warn user if any years have a small sample size
+    ana3_min_sample_size = 4
+    warnings_to_show = 3
+    if median_owners_by_year["count"].min() < ana3_min_sample_size:
+        ana3_warning_message = f"Warning: Some years have a very small sample size (<{ana3_min_sample_size} games). Results may be noisy or unreliable."
+        for year, count in median_owners_by_year[median_owners_by_year["count"] < ana3_min_sample_size][["release_year", "count"]].values:
+            if warnings_to_show > 0:
+                ana3_warning_message += f"\n- Year {year}: {count} games"
+                warnings_to_show -= 1
+            else:
+                ana3_warning_message += "\n- [...]"
+                break
+        ana3_warning_message += "\n\nConsider adjusting the filters in the sidebar for more meaningful results."
+        st.warning(ana3_warning_message)
 
-# Warn user if any years have a small sample size
-ana3_min_sample_size = 4
-warnings_to_show = 3
-if median_owners_by_year["count"].min() < ana3_min_sample_size:
-    ana3_warning_message = f"Warning: Some years have a very small sample size (<{ana3_min_sample_size} games). Results may be noisy or unreliable."
-    for year, count in median_owners_by_year[median_owners_by_year["count"] < ana3_min_sample_size][["release_year", "count"]].values:
-        if warnings_to_show > 0:
-            ana3_warning_message += f"\n- Year {year}: {count} games"
-            warnings_to_show -= 1
-        else:
-            ana3_warning_message += "\n- [...]"
-            break
-    ana3_warning_message += "\n\nConsider adjusting the filters in the sidebar for more meaningful results."
-    st.warning(ana3_warning_message)
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(median_owners_by_year["release_year"], median_owners_by_year["estimated_owners_boxleiter"], label="Median Estimated Owners", marker="o", linestyle="-")
+    ax.fill_between(
+        df_ana3_confidence_int["release_year"], df_ana3_confidence_int["ci_lower"], df_ana3_confidence_int["ci_upper"], alpha=0.2, label=f"{confidence_area_level * 100:.0f}% Confidence Interval"
+    )
 
-# Plot
-fig, ax = plt.subplots(figsize=(10, 6))
-ax.plot(median_owners_by_year["release_year"], median_owners_by_year["estimated_owners_boxleiter"], label="Median Estimated Owners", marker="o", linestyle="-")
-ax.fill_between(
-    df_ana3_confidence_int["release_year"], df_ana3_confidence_int["ci_lower"], df_ana3_confidence_int["ci_upper"], alpha=0.2, label=f"{confidence_area_level * 100:.0f}% Confidence Interval"
-)
+    # add a trend line
+    coeffs = np.polyfit(median_owners_by_year["release_year"], median_owners_by_year["estimated_owners_boxleiter"], 2)
+    trend_line = np.poly1d(coeffs)
+    ax.plot(median_owners_by_year["release_year"], trend_line(median_owners_by_year["release_year"]), linestyle="--", color="red", label="Trend Line (Quadratic)")
 
-# add a trend line
-coeffs = np.polyfit(median_owners_by_year["release_year"], median_owners_by_year["estimated_owners_boxleiter"], 2)
-trend_line = np.poly1d(coeffs)
-ax.plot(median_owners_by_year["release_year"], trend_line(median_owners_by_year["release_year"]), linestyle="--", color="red", label="Trend Line (Quadratic)")
+    ax.set_xlabel("Release Year")
+    ax.set_ylabel("Estimated Number of Owners")
+    ax.set_title(f'Estimated number of owners for "{selected_tag}"')
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.xaxis.set_minor_locator(MultipleLocator(1))
+    ax.grid(True)
+    ax.legend()
 
-ax.set_xlabel("Release Year")
-ax.set_ylabel("Estimated Number of Owners")
-ax.set_title(f'Estimated number of owners for "{selected_tag}"')
-ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-ax.xaxis.set_minor_locator(MultipleLocator(1))
-ax.grid(True)
-ax.legend()
-
-st.pyplot(fig)
+    st.pyplot(fig)
+except Exception as e:
+    st.error(f"Could not create chart for {selected_tag}, most likely due to lack of data. \n\nError message: {e}")
 
 ##############################
 # Analysis 4: playtime_median through the years
@@ -292,68 +297,117 @@ st.write(
          user retention."""
 )
 
-minimum_playtime = 0.1  # Minimum playtime to consider a game for analysis
+try:
+    minimum_playtime = 0.1  # Minimum playtime to consider a game for analysis
 
-df_ana4 = df_filtered[df_filtered["playtime_median"] > minimum_playtime]  # Filter out games with essentially no owners
-top_1_percentile = df_ana4["playtime_median"].quantile(0.99)
-df_ana4 = df_ana4[df_ana4["playtime_median"] < top_1_percentile]  # Filter out the top 1% of games, as they are likely outliers
+    df_ana4 = df_filtered[df_filtered["playtime_median"] > minimum_playtime]  # Filter out games with essentially no owners
+    top_1_percentile = df_ana4["playtime_median"].quantile(0.99)
+    df_ana4 = df_ana4[df_ana4["playtime_median"] < top_1_percentile]  # Filter out the top 1% of games, as they are likely outliers
 
-# Gorup by releasy year and calculate the values for each percentile
-median_owners_by_year = df_ana4.groupby("release_year")["playtime_median"].median().reset_index()
+    # Gorup by releasy year and calculate the values for each percentile
+    median_owners_by_year = df_ana4.groupby("release_year")["playtime_median"].median().reset_index()
 
-# add the _count_ of elements in each year
-median_owners_by_year["count"] = df_ana4.groupby("release_year").size().reset_index()[0]
+    # add the _count_ of elements in each year
+    median_owners_by_year["count"] = df_ana4.groupby("release_year").size().reset_index()[0]
 
-# Get confidence intervals through utils
-df_ana4_confidence_int = utils.median_confidence_intervals(df_ana4, "playtime_median", "release_year", confidence_area_level)
+    # Get confidence intervals through utils
+    df_ana4_confidence_int = utils.median_confidence_intervals(df_ana4, "playtime_median", "release_year", confidence_area_level)
 
-# Clip the confidence intervals above 0
-df_ana4_confidence_int["ci_lower"] = df_ana4_confidence_int["ci_lower"].clip(lower=0)
-df_ana4_confidence_int["ci_upper"] = df_ana4_confidence_int["ci_upper"].clip(lower=0)
+    # Clip the confidence intervals above 0
+    df_ana4_confidence_int["ci_lower"] = df_ana4_confidence_int["ci_lower"].clip(lower=0)
+    df_ana4_confidence_int["ci_upper"] = df_ana4_confidence_int["ci_upper"].clip(lower=0)
 
-# Calculate the global median playtime for that year range
-global_median_playtime = df_all_in_year_range[df_all_in_year_range["playtime_median"] > minimum_playtime]["playtime_median"].median()
+    # Calculate the global median playtime for that year range
+    global_median_playtime = df_all_in_year_range[df_all_in_year_range["playtime_median"] > minimum_playtime]["playtime_median"].median()
 
-# Warn user if any years have a small sample size
-ana4_min_sample_size = 4
-warnings_to_show = 3
-if median_owners_by_year["count"].min() < ana4_min_sample_size:
-    ana4_warning_message = f"Warning: Some years have a very small sample size (<{ana4_min_sample_size} games). Results may be noisy or unreliable."
-    for year, count in median_owners_by_year[median_owners_by_year["count"] < ana4_min_sample_size][["release_year", "count"]].values:
-        if warnings_to_show > 0:
-            ana4_warning_message += f"\n- Year {year}: {count} games"
-            warnings_to_show -= 1
-        else:
-            ana4_warning_message += "\n- [...]"
-            break
-    ana4_warning_message += "\n\nConsider adjusting the filters in the sidebar for more meaningful results."
-    st.warning(ana4_warning_message)
+    # Warn user if any years have a small sample size
+    ana4_min_sample_size = 4
+    warnings_to_show = 3
+    if median_owners_by_year["count"].min() < ana4_min_sample_size:
+        ana4_warning_message = f"Warning: Some years have a very small sample size (<{ana4_min_sample_size} games). Results may be noisy or unreliable."
+        for year, count in median_owners_by_year[median_owners_by_year["count"] < ana4_min_sample_size][["release_year", "count"]].values:
+            if warnings_to_show > 0:
+                ana4_warning_message += f"\n- Year {year}: {count} games"
+                warnings_to_show -= 1
+            else:
+                ana4_warning_message += "\n- [...]"
+                break
+        ana4_warning_message += "\n\nConsider adjusting the filters in the sidebar for more meaningful results."
+        st.warning(ana4_warning_message)
 
-# Plot
-fig, ax = plt.subplots(figsize=(10, 6))
-ax.plot(median_owners_by_year["release_year"], median_owners_by_year["playtime_median"], label="Median Playtime", marker="o", linestyle="-")
-ax.fill_between(
-    df_ana4_confidence_int["release_year"], df_ana4_confidence_int["ci_lower"], df_ana4_confidence_int["ci_upper"], alpha=0.2, label=f"{confidence_area_level * 100:.0f}% Confidence Interval"
-)
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(median_owners_by_year["release_year"], median_owners_by_year["playtime_median"], label="Median Playtime", marker="o", linestyle="-")
+    ax.fill_between(
+        df_ana4_confidence_int["release_year"], df_ana4_confidence_int["ci_lower"], df_ana4_confidence_int["ci_upper"], alpha=0.2, label=f"{confidence_area_level * 100:.0f}% Confidence Interval"
+    )
 
-# add a trend line
-coeffs = np.polyfit(median_owners_by_year["release_year"], median_owners_by_year["playtime_median"], 2)
-trend_line = np.poly1d(coeffs)
-ax.plot(median_owners_by_year["release_year"], trend_line(median_owners_by_year["release_year"]), linestyle="--", color="red", label="Trend Line (Quadratic)")
-ax.axhline(global_median_playtime, color="green", linestyle="--", label=f"Global Median Playtime ({global_median_playtime:.1f} hours)", alpha=0.5)  #  Plot the global median review score for reference
+    # add a trend line
+    coeffs = np.polyfit(median_owners_by_year["release_year"], median_owners_by_year["playtime_median"], 2)
+    trend_line = np.poly1d(coeffs)
+    ax.plot(median_owners_by_year["release_year"], trend_line(median_owners_by_year["release_year"]), linestyle="--", color="red", label="Trend Line (Quadratic)")
+    ax.axhline(
+        global_median_playtime, color="green", linestyle="--", label=f"Global Median Playtime ({global_median_playtime:.1f} hours)", alpha=0.5
+    )  #  Plot the global median review score for reference
 
-ax.set_xlabel("Release Year")
-ax.set_ylabel("Median Playtime (hours)")
-ax.set_title(f'Median Playtime (hours) "{selected_tag}"')
-ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-ax.xaxis.set_minor_locator(MultipleLocator(1))
-ax.grid(True)
+    ax.set_xlabel("Release Year")
+    ax.set_ylabel("Median Playtime (hours)")
+    ax.set_title(f'Median Playtime (hours) "{selected_tag}"')
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.xaxis.set_minor_locator(MultipleLocator(1))
+    ax.grid(True)
+    ax.legend()
+
+    st.pyplot(fig)
+except Exception as e:
+    st.error(f"Could not create chart for {selected_tag}, most likely due to lack of data. \n\nError message: {e}")
+
+##############################
+# Analysis 5: Pricing distribution (NOT through the years)
+##############################
+st.write("### 5. Launch Price Distribution")
+st.write("This chart shows the distribution of launch prices for games with the selected tag, comparaed against the global distribution.")
+
+max_price = 80
+increments = 0.5
+
+# Create bins for a histogram to base the line chart on
+bins = np.arange(0, max_price + increments, increments)
+# Replace last bin edge with infinity to include all values above the last bin
+bins[-1] = np.inf
+counts, bin_edges = np.histogram(df_filtered["price_original"].dropna(), bins=bins)
+# Calculate bin centers (x-axis values) for the line chart
+x = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+# Apply Savitzky-Golay filter for smoothing.
+window_length = 13
+if window_length > len(counts):  # Prevent window exceeding the number of data points
+    window_length = len(counts) if len(counts) % 2 == 1 else len(counts) - 1
+
+smoothed_counts = savgol_filter(counts, window_length=window_length, polyorder=2, mode="interp")
+smoothed_counts = np.maximum(0, smoothed_counts)  # Clip negative values to 0
+
+
+# Repeat for global data
+global_counts, _ = np.histogram(df_all_in_year_range["price_original"].dropna(), bins=bins)
+global_smoothed_counts = savgol_filter(global_counts, window_length=window_length, polyorder=2, mode="interp")
+global_smoothed_counts = np.maximum(0, global_smoothed_counts)  # Clip negative values
+# Normalize to the same scale as the tag-specific data
+global_smoothed_counts = (global_smoothed_counts / global_smoothed_counts.sum()) * smoothed_counts.sum()
+
+
+# Create the line chart
+fig, ax = plt.subplots()
+ax.plot(x, smoothed_counts, label=f"Number of Releases ({selected_tag}, smoothed)", linestyle="-", zorder=2)
+ax.plot(x, global_smoothed_counts, color="green", alpha=0.3, label="Number of Releases (global, normalized and smoothed)", linestyle="--", zorder=1)
+ax.set_title(f"Distribution of Launch Prices for '{selected_tag}' Games")
+ax.set_xlim(0, max_price)
+ax.margins(x=0, y=0)
+ax.set_xlabel("Price")
+ax.set_ylabel("Frequency")
 ax.legend()
 
 st.pyplot(fig)
-##############################
-# Analysis 5: Pricing distribution (histogram?) (NOT through the years)
-##############################
 
 ##############################
 # Analysis 6: Best and worst tag interactions (NOT through the years)
