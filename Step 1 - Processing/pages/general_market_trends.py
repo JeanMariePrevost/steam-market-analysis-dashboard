@@ -1,11 +1,10 @@
-import ast
 import matplotlib.pyplot as plt
-from matplotlib.ticker import AutoMinorLocator
+import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 import streamlit as st
-import os
-import matplotlib.ticker as mticker
+from matplotlib.ticker import AutoMinorLocator
+
 from utils import load_main_dataset
 
 # Page configuration & custom CSS

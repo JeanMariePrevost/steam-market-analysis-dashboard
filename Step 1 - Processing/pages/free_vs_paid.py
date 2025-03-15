@@ -1,10 +1,10 @@
 import matplotlib.pyplot as plt
-from matplotlib.ticker import AutoMinorLocator
 import matplotlib.ticker as mticker
 import pandas as pd
 import streamlit as st
-from utils import remove_outliers_iqr
-from utils import load_main_dataset
+from matplotlib.ticker import AutoMinorLocator
+
+from utils import load_main_dataset, remove_outliers_iqr
 
 ##############################
 # Load & Prepare Data

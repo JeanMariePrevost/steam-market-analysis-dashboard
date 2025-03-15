@@ -1,14 +1,13 @@
-import ast
 import random
+
 import matplotlib.pyplot as plt
-from matplotlib.ticker import AutoMinorLocator, MaxNLocator, MultipleLocator
 import numpy as np
 import pandas as pd
 import streamlit as st
-import os
-import matplotlib.ticker as mticker
-import utils
+from matplotlib.ticker import MaxNLocator, MultipleLocator
 from scipy.signal import savgol_filter
+
+import utils
 
 # Page configuration & custom CSS
 st.set_page_config(page_title="Tags Trends")
@@ -107,9 +106,6 @@ if selected_year_range[0] < 2007:
 ##############################
 # Analysis 1: Relative Releases Across Years
 ##############################
-from matplotlib.ticker import MaxNLocator, MultipleLocator
-import numpy as np
-
 st.write("### 1. Relative Releases Across Years")
 st.write(
     "This analysis shows the relative number of releases for the selected tag compared to the expected count based on the overall distribution of tags, hinting us at trends in the popularity of the tag over time, independent of the overall growth of the platform."
