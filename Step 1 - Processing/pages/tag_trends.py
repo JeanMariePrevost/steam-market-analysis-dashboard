@@ -10,7 +10,7 @@ import matplotlib.ticker as mticker
 import utils
 
 # Page configuration & custom CSS
-st.set_page_config(page_title="Tags And Genres Trends")
+st.set_page_config(page_title="Tags Trends")
 st.markdown(
     """
     <style>
@@ -25,13 +25,6 @@ st.markdown(
 
 df = utils.load_main_dataset()
 
-# Page Title & Description
-st.title("Tags And Genres Trends")
-st.write("Select a tag in the sidebar to begin.")
-
-if df is None or df.empty:
-    st.warning(f"Data could be loaded. Please ensure the path is correct and the data is available.")
-    st.stop()
 
 ############################################
 # Sidebar
@@ -48,7 +41,7 @@ selected_tag = tag_mapping.get(selected_tag_display, "Select a Tag")  # Map back
 # Sidebar Filter: Release Year Range
 min_year = int(df["release_year"].min())
 max_year = int(df["release_year"].max())
-selected_year_range = st.sidebar.slider("Select Release Year Range", min_year, max_year, (2007, max_year - 1))
+selected_year_range = st.sidebar.slider("Select Release Year Range", min_year, max_year, (2010, max_year - 1))
 
 # Sidebar, minimum number of reviews for analysis 2
 st.sidebar.markdown("---")
@@ -68,6 +61,13 @@ if selected_tag == "Select a Tag":
     selected_tag_display = random_tag
     selected_tag = tag_mapping.get(random_tag, "Select a Tag")
 
+# Page Title & Description
+st.title(f'Tag Trends Analysis ("{selected_tag}")')
+st.write("Select a tag in the sidebar to begin.")
+
+if df is None or df.empty:
+    st.warning(f"Data could be loaded. Please ensure the path is correct and the data is available.")
+    st.stop()
 
 if selected_tag == "Select a Tag":
     st.warning("Please select a tag from the sidebar to begin analysis.")
@@ -86,9 +86,13 @@ if df_filtered.empty:
 st.write(f"Debug - Selected Tag = {selected_tag}")
 st.write(f"Debug - Entries in filtered_df = {df_filtered.shape[0]}")
 
+# Warn user if there are fewer than 200 games in df_filtered
+if df_filtered.shape[0] < 200:
+    st.warning(f"**Note**: There are less than 200 titles matching the selected tag and year range. Results may be noisy or unreliable.")
+
 
 if selected_year_range[0] < 2007:
-    st.warning("Limited data available before 2007. Consider adjusting the release year range for more meaningful insights.")
+    st.warning("Very limited data available before 2007. Consider adjusting the release year range for more meaningful insights.")
 
 # ##############################
 # # Analysis 1: Relative Releases Across Years
@@ -245,10 +249,16 @@ st.write(median_owners_by_year)
 
 # Warn user if any years have a small sample size
 ana3_min_sample_size = 4
+warnings_to_show = 3
 if median_owners_by_year["count"].min() < ana3_min_sample_size:
     ana3_warning_message = f"Warning: Some years have a very small sample size (<{ana3_min_sample_size} games). Results may be noisy or unreliable."
     for year, count in median_owners_by_year[median_owners_by_year["count"] < ana3_min_sample_size][["release_year", "count"]].values:
-        ana3_warning_message += f"\n- Year {year}: {count} games"
+        if warnings_to_show > 0:
+            ana3_warning_message += f"\n- Year {year}: {count} games"
+            warnings_to_show -= 1
+        else:
+            ana3_warning_message += "\n- [...]"
+            break
     ana3_warning_message += "\n\nConsider adjusting the filters in the sidebar for more meaningful results."
     st.warning(ana3_warning_message)
 
