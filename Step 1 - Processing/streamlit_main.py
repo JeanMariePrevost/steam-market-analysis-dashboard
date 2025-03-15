@@ -12,5 +12,5 @@ st.title("Analysis of Steam Store Data")
 st.write("To begin, choose a page from the sidebar.")
 
 if df is None or df.empty:
-    st.warning(f"Data could be loaded. Please ensure the path is correct and the data is available.")
+    st.error(f"Data could not be loaded. Please ensure the path is correct and the data is available.")
     st.stop()

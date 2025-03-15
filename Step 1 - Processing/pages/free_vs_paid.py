@@ -32,7 +32,7 @@ st.write(
 )
 
 if df is None or df.empty:
-    st.warning(f"Data could be loaded. Please ensure the path is correct and the data is available.")
+    st.error(f"Data could not be loaded. Please ensure the path is correct and the data is available.")
     st.stop()
 
 ##############################

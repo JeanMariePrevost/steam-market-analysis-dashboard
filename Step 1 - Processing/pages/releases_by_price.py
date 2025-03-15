@@ -50,7 +50,7 @@ st.title("Game Releases by Price")
 st.write("This page allows you to explore the distribution of game releases by their launch price. You can filter by genre, tag, release year, and price range to see how the distribution changes.")
 
 if df is None or df.empty:
-    st.warning(f"Data could be loaded. Please ensure the path is correct and the data is available.")
+    st.error(f"Data could not be loaded. Please ensure the path is correct and the data is available.")
     st.stop()
 
 ##############################

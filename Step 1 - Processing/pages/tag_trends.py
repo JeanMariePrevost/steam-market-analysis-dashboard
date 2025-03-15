@@ -73,7 +73,7 @@ if selected_tag == "Select a Tag":
 st.title(f'Tag Trends Analysis ("{selected_tag}")')
 
 if df is None or df.empty:
-    st.warning(f"Data could be loaded. Please ensure the path is correct and the data is available.")
+    st.error(f"Data could not be loaded. Please ensure the path is correct and the data is available.")
     st.stop()
 
 if selected_tag == "Select a Tag":
