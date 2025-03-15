@@ -294,3 +294,77 @@ def do_early_access():
 
 with st.spinner("Running...", show_time=True):
     do_early_access()
+
+
+##############################
+# gamefaqs_difficulty_rating
+##############################
+def do_early_access():
+    st.header("Game Difficulty")
+    st.write("Here we analyze the impact of game difficulty ratings (as defined by GameFAQs) on critical reception.")
+
+    df_difficulty = df_filtered.copy()
+
+    # Filter out games with < 10 reviews or a zero review score
+    df_difficulty = df_difficulty[df_difficulty["steam_total_reviews"] >= 10]
+    df_difficulty = df_difficulty[df_difficulty["steam_positive_review_ratio"] > 0]
+
+    # Convert all early_access values to strings, mapping booleans appropriately
+    df_difficulty["gamefaqs_difficulty_rating"].fillna("unknown", inplace=True)
+
+    # normalize review scores against yearly trends
+    df_difficulty["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_difficulty, "steam_positive_review_ratio", "release_year", method="diff")
+
+    _, p_value = utils.anova_categorical(df_difficulty, "steam_positive_review_ratio", "gamefaqs_difficulty_rating")
+    st.write(f"(p-value: {p_value:.2f}).")
+
+    # group by controller support values
+    df_difficulty = (
+        df_difficulty.groupby("gamefaqs_difficulty_rating")
+        .agg(
+            {
+                "steam_positive_review_ratio": "mean",
+                "steam_total_reviews": "count",
+                "release_year": "mean",
+            }
+        )
+        .reset_index()
+    )
+
+    # Rename the difficulty ratings
+    rename_dict = {
+        "unknown": "unknown",
+        "Simple": "1. Simple",
+        "Simple-Easy": "2. Simple-Easy",
+        "Easy": "3. Easy",
+        "Easy-Just Right": "4. Easy-Just Right",
+        "Just Right": "5. Just Right",
+        "Just Right-Tough": "6. Just Right-Tough",
+        "Tough": "7. Tough",
+        "Tough-Unforgiving": "8. Tough-Unforgiving",
+        "Unforgiving": "9. Unforgiving",
+    }
+    df_difficulty["gamefaqs_difficulty_rating"] = df_difficulty["gamefaqs_difficulty_rating"].map(rename_dict)
+
+    # Sort by difficulty rating
+    df_difficulty = df_difficulty.sort_values("gamefaqs_difficulty_rating", ascending=False)
+
+    # Plot as a bar chart
+    # fig, ax = plt.subplots(figsize=(10, 6))
+    # ax.bar(df_difficulty["gamefaqs_difficulty_rating"], df_difficulty["steam_positive_review_ratio"], alpha=0.7)
+    # ax.set_xlabel("Game Difficulty Rating")
+    # ax.set_ylabel("Mean Review Score")
+    # ax.set_title("Mean Review Score by Game Difficulty Rating")
+    # ax.legend()
+    # st.pyplot(fig)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.barh(df_difficulty["gamefaqs_difficulty_rating"], df_difficulty["steam_positive_review_ratio"], alpha=0.7)
+    ax.set_ylabel("Game Difficulty Rating")
+    ax.set_xlabel("Mean Review Score")
+    ax.set_title("Mean Review Score by Game Difficulty Rating")
+    ax.legend()
+    st.pyplot(fig)
+
+
+with st.spinner("Running...", show_time=True):
+    do_early_access()
