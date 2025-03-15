@@ -412,3 +412,67 @@ st.pyplot(fig)
 ##############################
 # Analysis 6: Best and worst tag interactions (NOT through the years)
 ##############################
+st.write(f"### 6. Best and Worst Tag Interactions for '{selected_tag}'")
+st.write(
+    f"""This analysis shows the tags that have the most positive and negative impact on the average positive review ratio of games with the tag **'{selected_tag}'**.
+    The values represent the difference in average positive review ratio between games with and without the tag."""
+)
+
+with st.spinner("Running...", show_time=True):
+    min_sample_size = 10  # Won't consider interactions with fewer games
+    number_of_interactions = 10  # How many interactions to show for _each_ best and worst
+
+    # Calculate the baseline positive review ratio for the selected tag
+    baseline_metric = df_filtered["steam_positive_review_ratio"].mean()  # use median again?
+
+    tag_deltas = {}
+
+    for tag in tag_mapping.values():
+        if tag == selected_tag:  # Skip the selected tag itself
+            continue
+
+        # Filter rows where the co-occurring tag is present in the "tags" column
+        mask = df_filtered["tags"].apply(lambda tags: tag in tags)
+        df_sub = df_filtered[mask]
+
+        # Optional: Check for a minimum sample size for reliability
+        if len(df_sub) < min_sample_size:
+            continue
+
+        # Calculate that group's positive review ratio
+        subgroup_metric = df_sub["steam_positive_review_ratio"].mean()  # use median again?
+        delta = subgroup_metric - baseline_metric  # Calculate the delta
+        tag_deltas[tag] = delta
+
+    # Identify the N best and worst interactions by sorting then slicing
+    best_interactions = sorted(tag_deltas.items(), key=lambda x: x[1], reverse=True)[:number_of_interactions]
+    worst_interactions = sorted(tag_deltas.items(), key=lambda x: x[1], reverse=False)[:number_of_interactions]
+
+    # Display the best interactions
+    st.write("#### Best Interactions")
+    for tag, delta in best_interactions:
+        st.write(f"- **{tag}**: {delta:.3f}")
+
+    # Display the worst interactions
+    st.write("#### Worst Interactions")
+    for tag, delta in worst_interactions:
+        st.write(f"- **{tag}**: {delta:.3f}")
+
+    fig, ax = plt.subplots()
+    # Fetch top and bottom N tags by a given metric.
+    metric = "estimated_owners_boxleiter"
+    n_value = 5
+
+    # concat the best_interactions and worst_interactions into a single dataframe
+    df_top_and_bottom = pd.DataFrame(best_interactions + worst_interactions, columns=["tags", "relative_diff"])
+    df_top_and_bottom = df_top_and_bottom.sort_values(by="relative_diff", ascending=True)
+
+    # set their color to red/green based on the sign of the relative_diff
+    colors = ["green" if x > 0 else "red" for x in df_top_and_bottom["relative_diff"]]
+    # Create a horizontal bar plot
+    plt.barh(df_top_and_bottom["tags"], df_top_and_bottom["relative_diff"], color=colors)
+    plt.title(f"Best and Worst Tag Interactions for '{selected_tag}'")
+    plt.xlabel("Review Score Delta from Average")
+    plt.ylabel("Tags")
+    plt.tight_layout()
+    st.pyplot(fig)
