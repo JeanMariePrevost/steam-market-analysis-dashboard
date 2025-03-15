@@ -196,7 +196,7 @@ ax.fill_between(median_reception_by_year["release_year"], lower_percentiles, upp
 coeffs = np.polyfit(median_reception_by_year["release_year"], median_reception_by_year["steam_positive_review_ratio"], 2)
 trend_line = np.poly1d(coeffs)
 ax.plot(median_reception_by_year["release_year"], trend_line(median_reception_by_year["release_year"]), linestyle="--", color="red", label="Trend Line (Quadratic)")
-ax.axhline(global_median_review, color="green", linestyle="--", label="Global Median Review Score", alpha=0.7)  #  Plot the global median review score for reference
+ax.axhline(global_median_review, color="green", linestyle="--", label=f"Global Median Review Score ({global_median_review:.2f})", alpha=0.5)  #  Plot the global median review score for reference
 
 ax.set_xlabel("Release Year")
 ax.set_ylabel("Average Steam Positive Review Ratio")
@@ -285,7 +285,72 @@ st.pyplot(fig)
 ##############################
 # Analysis 4: playtime_median through the years
 ##############################
+st.write("### 4. Playtime Analysis")
+st.write(
+    """This analysis shows the median total playtime for games with the selected tag across the years,
+         along with a confidence interval to indicate the range of values. This can help us approximate
+         user retention."""
+)
 
+minimum_playtime = 0.1  # Minimum playtime to consider a game for analysis
+
+df_ana4 = df_filtered[df_filtered["playtime_median"] > minimum_playtime]  # Filter out games with essentially no owners
+top_1_percentile = df_ana4["playtime_median"].quantile(0.99)
+df_ana4 = df_ana4[df_ana4["playtime_median"] < top_1_percentile]  # Filter out the top 1% of games, as they are likely outliers
+
+# Gorup by releasy year and calculate the values for each percentile
+median_owners_by_year = df_ana4.groupby("release_year")["playtime_median"].median().reset_index()
+
+# add the _count_ of elements in each year
+median_owners_by_year["count"] = df_ana4.groupby("release_year").size().reset_index()[0]
+
+# Get confidence intervals through utils
+df_ana4_confidence_int = utils.median_confidence_intervals(df_ana4, "playtime_median", "release_year", confidence_area_level)
+
+# Clip the confidence intervals above 0
+df_ana4_confidence_int["ci_lower"] = df_ana4_confidence_int["ci_lower"].clip(lower=0)
+df_ana4_confidence_int["ci_upper"] = df_ana4_confidence_int["ci_upper"].clip(lower=0)
+
+# Calculate the global median playtime for that year range
+global_median_playtime = df_all_in_year_range[df_all_in_year_range["playtime_median"] > minimum_playtime]["playtime_median"].median()
+
+# Warn user if any years have a small sample size
+ana4_min_sample_size = 4
+warnings_to_show = 3
+if median_owners_by_year["count"].min() < ana4_min_sample_size:
+    ana4_warning_message = f"Warning: Some years have a very small sample size (<{ana4_min_sample_size} games). Results may be noisy or unreliable."
+    for year, count in median_owners_by_year[median_owners_by_year["count"] < ana4_min_sample_size][["release_year", "count"]].values:
+        if warnings_to_show > 0:
+            ana4_warning_message += f"\n- Year {year}: {count} games"
+            warnings_to_show -= 1
+        else:
+            ana4_warning_message += "\n- [...]"
+            break
+    ana4_warning_message += "\n\nConsider adjusting the filters in the sidebar for more meaningful results."
+    st.warning(ana4_warning_message)
+
+# Plot
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(median_owners_by_year["release_year"], median_owners_by_year["playtime_median"], label="Median Playtime", marker="o", linestyle="-")
+ax.fill_between(
+    df_ana4_confidence_int["release_year"], df_ana4_confidence_int["ci_lower"], df_ana4_confidence_int["ci_upper"], alpha=0.2, label=f"{confidence_area_level * 100:.0f}% Confidence Interval"
+)
+
+# add a trend line
+coeffs = np.polyfit(median_owners_by_year["release_year"], median_owners_by_year["playtime_median"], 2)
+trend_line = np.poly1d(coeffs)
+ax.plot(median_owners_by_year["release_year"], trend_line(median_owners_by_year["release_year"]), linestyle="--", color="red", label="Trend Line (Quadratic)")
+ax.axhline(global_median_playtime, color="green", linestyle="--", label=f"Global Median Playtime ({global_median_playtime:.1f} hours)", alpha=0.5)  #  Plot the global median review score for reference
+
+ax.set_xlabel("Release Year")
+ax.set_ylabel("Median Playtime (hours)")
+ax.set_title(f'Median Playtime (hours) "{selected_tag}"')
+ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+ax.xaxis.set_minor_locator(MultipleLocator(1))
+ax.grid(True)
+ax.legend()
+
+st.pyplot(fig)
 ##############################
 # Analysis 5: Pricing distribution (histogram?) (NOT through the years)
 ##############################
