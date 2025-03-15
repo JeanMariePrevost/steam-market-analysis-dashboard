@@ -100,7 +100,6 @@ filtered_df = filtered_df[(filtered_df["price_original"] >= price_range[0]) & (f
 ##############################
 # Dynamic page header
 ##############################
-# Plot Histogram + Scaled KDE with Log Y-Axis
 st.write("### Price Distribution of Games")
 genre_string = selected_genre_display.split(" (")[0] if selected_genre != "All" else "All"
 tag_string = selected_tag_display.split(" (")[0] if selected_tag != "All" else "All"
