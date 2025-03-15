@@ -281,3 +281,52 @@ def binom_confidence_interval(successes, totals, confidence=0.95):
     upper_bounds = np.clip(upper_bounds, 0, 1)
 
     return lower_bounds, upper_bounds
+
+
+import numpy as np
+from scipy.stats import norm
+
+
+def median_confidence_intervals(df, value_col, group_col, confidence=0.95):
+    """
+    Compute confidence intervals for the median of a continuous dataset using standard error of the median.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing the data.
+        value_col (str): Column name containing the continuous values (e.g., estimated owners).
+        group_col (str): Column name to group by (e.g., release_year).
+        confidence (float): Confidence level (default is 0.95).
+
+    Returns:
+        pd.DataFrame: DataFrame with group_col, median values, and lower/upper confidence bounds.
+    """
+    grouped = df.groupby(group_col)[value_col].apply(list).reset_index()
+
+    lower_bounds, upper_bounds, medians = [], [], []
+
+    z = norm.ppf((1 + confidence) / 2)  # Z-score for two-tailed CI (e.g., 1.96 for 95% CI)
+
+    for values in grouped[value_col]:
+        values = np.array(values)
+        n = len(values)
+
+        if n == 0:
+            medians.append(np.nan)
+            lower_bounds.append(np.nan)
+            upper_bounds.append(np.nan)
+            continue
+
+        median_value = np.median(values)
+        sigma = np.std(values, ddof=1)  # Sample standard deviation
+        sem = (1.2533 * sigma) / np.sqrt(n)  # Standard error of the median
+
+        lower_bounds.append(median_value - z * sem)
+        upper_bounds.append(median_value + z * sem)
+        medians.append(median_value)
+
+    result_df = grouped[[group_col]].copy()
+    result_df["median"] = medians
+    result_df["ci_lower"] = lower_bounds
+    result_df["ci_upper"] = upper_bounds
+
+    return result_df
