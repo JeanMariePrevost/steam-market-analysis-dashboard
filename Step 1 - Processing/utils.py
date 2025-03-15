@@ -1,7 +1,8 @@
-from scipy.stats import norm
+import os
+
 import numpy as np
 import pandas as pd
-import os
+from scipy.stats import norm
 from tqdm import tqdm
 
 
@@ -330,3 +331,40 @@ def median_confidence_intervals(df, value_col, group_col, confidence=0.95):
     result_df["ci_upper"] = upper_bounds
 
     return result_df
+
+
+def get_trend_line_and_r2(x, y, degree=1):
+    """
+    Calculate the trend line and r² value for the provided data.
+
+    Parameters:
+        x (array-like): Independent variable data.
+        y (array-like): Dependent variable data.
+        degree (int): Degree of the polynomial fit (default is 1 for linear).
+
+    Returns:
+        trend_line (np.poly1d): The polynomial function representing the trend line.
+        r2 (float): The coefficient of determination (r²) for the fit.
+
+    Example usage:
+        x = df_sorted["achievements_count"]
+        y = df_sorted["steam_positive_review_ratio"]
+        trend_line, r2 = get_trend_line_and_r2(x, y)
+        print("r²:", r2)
+        ax.plot(x, trend_line(x), label="Trend Line", color="red", linestyle="--")
+    """
+    # Fit a polynomial of the specified degree
+    coeffs = np.polyfit(x, y, degree)
+    trend_line = np.poly1d(coeffs)
+
+    # Predicted y-values from the trend line
+    y_pred = trend_line(x)
+
+    # Calculate the sum of squared residuals and total sum of squares
+    ss_res = np.sum((y - y_pred) ** 2)
+    ss_tot = np.sum((y - np.mean(y)) ** 2)
+
+    # Compute the coefficient of determination (r²)
+    r2 = 1 - (ss_res / ss_tot)
+
+    return trend_line, r2
