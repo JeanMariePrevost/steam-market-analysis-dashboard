@@ -14,7 +14,7 @@ from scipy.signal import savgol_filter
 import utils
 
 # Page configuration & custom CSS
-st.set_page_config(page_title="Factors of Sucess")
+st.set_page_config(page_title="Factors of Success")
 st.markdown(
     """
     <style>
@@ -216,6 +216,10 @@ def do_controller_support():
     # normalize review scores against yearly trends
     df_controller_support["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_controller_support, "steam_positive_review_ratio", "release_year", method="diff")
 
+    _, p_value = utils.anova_categorical(df_controller_support, "steam_positive_review_ratio", "controller_support")
+
+    st.write(f"We observe no measurable impact of controller support on the review score of games when controlling for release year (p-value: {p_value:.2f}).")
+
     # group by controller support values
     df_controller_support = (
         df_controller_support.groupby("controller_support")
@@ -228,8 +232,6 @@ def do_controller_support():
         )
         .reset_index()
     )
-
-    st.write("We observe no measurable impact of controller support on the review score of games when controlling for release year:")
 
     # Plot as a bar chart
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -258,17 +260,14 @@ def do_early_access():
     df_early_access = df_early_access[df_early_access["steam_total_reviews"] >= 10]
     df_early_access = df_early_access[df_early_access["steam_positive_review_ratio"] > 0]
 
-    df_early_access["clean_early_access"] = df_early_access["early_access"].dropna()
-    _, p_value = utils.ttest_two_groups(df_early_access, "steam_positive_review_ratio", "clean_early_access")
-    # st.write(f"t-statistic: {t_stat:.2f}, p-value: {p_value:.2f}")
-
-    st.write(f"We observe no significant cahnges on review scores from early access status and non-early access games and no real coorelation (p-value: {p_value:.2f}).")
-
     # Convert all early_access values to strings, mapping booleans appropriately
     df_early_access["early_access"] = df_early_access["early_access"].apply(lambda x: "yes" if x is True else ("no" if x is False else "unknown"))
 
     # normalize review scores against yearly trends
     df_early_access["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_early_access, "steam_positive_review_ratio", "release_year", method="diff")
+
+    _, p_value = utils.anova_categorical(df_early_access, "steam_positive_review_ratio", "early_access")
+    st.write(f"We observe no significant impact of early access status on review scores when controlling for year of release, and no meaningful coorelation (p-value: {p_value:.2f}).")
 
     # group by controller support values
     df_early_access = (
