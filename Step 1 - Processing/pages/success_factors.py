@@ -14,7 +14,7 @@ from scipy.signal import savgol_filter
 import utils
 
 # Page configuration & custom CSS
-st.set_page_config(page_title="Tags Trends")
+st.set_page_config(page_title="Factors of Sucess")
 st.markdown(
     """
     <style>
@@ -245,13 +245,61 @@ def do_controller_support():
     ax.set_xlabel("Controller Support")
     ax.set_ylabel("Mean Review Score")
     ax.set_title("Mean Review Score by Controller Support")
-
-    # ax.set_xlabel("Average Time to Beat (hours)")
-    # ax.set_ylabel("Mean Review Score")
-    # ax.set_title("Mean Review Score by Game Duration")
     ax.legend()
     st.pyplot(fig)
 
 
 with st.spinner("Running...", show_time=True):
     do_controller_support()
+
+
+##############################
+# early_access
+##############################
+def do_early_access():
+    st.header("Early Access")
+    st.write("Here we analyze the impact of early access on the success of games.")
+
+    df_early_access = df_filtered.copy()
+
+    # Filter out games with < 10 reviews or a zero review score
+    df_early_access = df_early_access[df_early_access["steam_total_reviews"] >= 10]
+    df_early_access = df_early_access[df_early_access["steam_positive_review_ratio"] > 0]
+
+    df_early_access["clean_early_access"] = df_early_access["early_access"].dropna()
+    t_stat, p_value = utils.ttest_two_groups(df_early_access, "steam_positive_review_ratio", "clean_early_access")
+    # st.write(f"t-statistic: {t_stat:.2f}, p-value: {p_value:.2f}")
+
+    st.write(f"We observe no significant impact on review scores between early access and non-early access games and no strong coorelation (p-value: {p_value:.2f}).")
+
+    # Convert all early_access values to strings, mapping booleans appropriately
+    df_early_access["early_access"] = df_early_access["early_access"].apply(lambda x: "yes" if x is True else ("no" if x is False else "unknown"))
+
+    # normalize review scores against yearly trends
+    df_early_access["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_early_access, "steam_positive_review_ratio", "release_year", method="diff")
+
+    # group by controller support values
+    df_early_access = (
+        df_early_access.groupby("early_access")
+        .agg(
+            {
+                "steam_positive_review_ratio": "mean",
+                "steam_total_reviews": "count",
+                "release_year": "mean",
+            }
+        )
+        .reset_index()
+    )
+
+    # Plot as a bar chart
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.bar(df_early_access["early_access"], df_early_access["steam_positive_review_ratio"], alpha=0.7)
+    ax.set_xlabel("Early Access")
+    ax.set_ylabel("Mean Review Score")
+    ax.set_title("Mean Review Score by Early Access")
+    ax.legend()
+    st.pyplot(fig)
+
+
+with st.spinner("Running...", show_time=True):
+    do_early_access()
