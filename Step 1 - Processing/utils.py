@@ -2,8 +2,8 @@ import os
 
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 from scipy.stats import norm
-from tqdm import tqdm
 
 
 def load_main_dataset() -> pd.DataFrame:
@@ -368,3 +368,68 @@ def get_trend_line_and_r2(x, y, degree=1):
     r2 = 1 - (ss_res / ss_tot)
 
     return trend_line, r2
+
+
+def normalize_metric_across_groups(df, metric_col, group_col="release_year", method="zscore"):
+    """
+    Normalizes a metric column based on grouping.
+    E.g. get the infliation-adjusted price for each year as opposed to the raw price.
+
+    Parameters:
+        df (pd.DataFrame): The DataFrame containing the data.
+        metric_col (str): The column name of the metric to normalize.
+        group_col (str): The column to group by (default: 'release_year').
+        method (str): Normalization method. Options:
+            - 'zscore': Standardize using z-score (meaning you get the number of standard deviations from the group mean, and lose the original units).
+            - 'diff': Compute the difference from the group mean (adjusts for shifts, but not variance).
+
+    Returns:
+        pd.Series: The normalized metric as a new pandas Series.
+
+    Example usage:
+        df_filtered["review_zscore"] = normalize_metric(df_filtered, "steam_positive_review_ratio", method="zscore")
+        df_filtered["review_diff"] = normalize_metric(df_filtered, "steam_positive_review_ratio", method="diff")
+    """
+    # Calculate group statistics
+    group_mean = df.groupby(group_col)[metric_col].transform("mean")
+
+    if method == "zscore":
+        group_std = df.groupby(group_col)[metric_col].transform("std")
+        normalized = (df[metric_col] - group_mean) / group_std
+    elif method == "diff":
+        normalized = df[metric_col] - group_mean
+    else:
+        raise ValueError("Method must be either 'zscore' or 'diff'.")
+
+    return normalized
+
+
+def ttest_two_groups(df, numeric_col, cat_col):
+    """
+    Performs Welch's t-test to determine if the mean of a numeric column differs significantly
+    between two groups defined by a categorical variable.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing the data.
+        numeric_col (str): The name of the numeric column to test, e.g. "steam_positive_review_ratio".
+        cat_col (str): The name of the categorical column that must have exactly 2 unique values, e.g. "early_access=True/False".
+
+    Returns:
+        - 't_statistic': The computed t statistic.
+        - 'p_value': The p-value from the test.
+
+    Example usage:
+        _, p_value = compare_two_groups_ttest(df, "steam_positive_review_ratio", "early_access")
+        print(f"p-value: {p_value:.3f}")
+    """
+    groups = df[cat_col].dropna().unique()
+    if len(groups) != 2:
+        raise ValueError(f"Column '{cat_col}' must have exactly 2 unique groups. Found: {groups}")
+
+    group1 = df[df[cat_col] == groups[0]][numeric_col]
+    group2 = df[df[cat_col] == groups[1]][numeric_col]
+
+    # Perform Welch's t-test
+    t_stat, p_value = stats.ttest_ind(group1, group2, equal_var=False)
+
+    return t_stat, p_value
