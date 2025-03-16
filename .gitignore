@@ -11,3 +11,4 @@ Step 1 - Processing/combined_df_cleaned.parquet
 *.feather
 *.parquet
 *.docx
+*/catboost_info/*

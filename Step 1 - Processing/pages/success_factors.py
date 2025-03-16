@@ -7,6 +7,7 @@ either in terms of sales or review score.
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import streamlit as st
 from matplotlib.ticker import MaxNLocator, MultipleLocator
 from scipy.signal import savgol_filter
@@ -766,3 +767,57 @@ plot_categorical(
     metric_label="Review Score",
     category_label="Runs on steam deck",
 )
+
+
+def do_runs_on_platform():
+    st.header("Platform Support")
+
+    with st.spinner("Running...", show_time=True):
+
+        df_runs_on = df_filtered.copy()
+
+        # normalize review scores against yearly trends
+        df_runs_on["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_runs_on, "steam_positive_review_ratio", "release_year", method="diff")
+
+        # Test for significance / detemination
+        win_f_stat, win_p_value, win_r_squared, win_cohen_d = utils.ttest_two_groups(df_runs_on, "steam_positive_review_ratio", "runs_on_windows")
+        mac_f_stat, mac_p_value, mac_r_squared, mac_cohen_d = utils.ttest_two_groups(df_runs_on, "steam_positive_review_ratio", "runs_on_mac")
+        linux_f_stat, linux_p_value, linux_r_squared, linux_cohen_d = utils.ttest_two_groups(df_runs_on, "steam_positive_review_ratio", "runs_on_linux")
+        deck_f_stat, deck_p_value, deck_r_squared, deck_cohen_d = utils.ttest_two_groups(df_runs_on, "steam_positive_review_ratio", "runs_on_steam_deck")
+
+        # Debug, just print each
+        format_string = ".3f"
+        st.write(
+            f"""
+            The findings are as follows:
+
+            Though all platform support had a small to moderate effect size, only the Linux and Mac support had a statistically significant impact on the review score.
+
+            - **Windows**: p-value: {win_p_value:{format_string}}, r-squared: {win_r_squared:{format_string}}, Cohen's d: {win_cohen_d:{format_string}}
+            - **Mac**: p-value: {mac_p_value:{format_string}}, r-squared: {mac_r_squared:{format_string}}, Cohen's d: {mac_cohen_d:{format_string}}
+            - **Linux**: p-value: {linux_p_value:{format_string}}, r-squared: {linux_r_squared:{format_string}}, Cohen's d: {linux_cohen_d:{format_string}}
+            - **Steam Deck**: p-value: {deck_p_value:{format_string}}, r-squared: {deck_r_squared:{format_string}}, Cohen's d: {deck_cohen_d:{format_string}}
+            """
+        )
+    # List of platform columns to compare
+    platform_columns = ["runs_on_windows", "runs_on_mac", "runs_on_linux", "runs_on_steam_deck"]
+
+    # Melt the DataFrame so that we have a row per game per platform. ("unpivot" the data)
+    # The "Supported" column will have the True/False values.
+    df_melted = df_runs_on.melt(id_vars=["steam_positive_review_ratio"], value_vars=platform_columns, var_name="Platform", value_name="Supported")
+
+    # Group by Platform and Supported to compute the mean normalized review score.
+    df_means = df_melted.groupby(["Platform", "Supported"])["steam_positive_review_ratio"].mean().reset_index()
+
+    # Create the bar plot using seaborn (because it automates the grouping)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(data=df_means, x="Platform", y="steam_positive_review_ratio", hue="Supported", ax=ax)
+    ax.set_title("Mean Normalized Review Score by Platform Support")
+    ax.set_xlabel("Platform")
+    ax.set_ylabel("Mean Normalized Steam Positive Review Ratio")
+
+    # Display the plot in Streamlit
+    st.pyplot(fig)
+
+
+do_runs_on_platform()
