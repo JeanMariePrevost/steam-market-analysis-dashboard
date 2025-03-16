@@ -215,11 +215,11 @@ def plot_numerical(
 
         x = df[independent_var_column]
         y = df[metric_column]
-        trend_line, r2, individual_p_values, p_value = utils.get_trend_line_r2_and_p(x, y, 1)
+        trend_line, r2, individual_p_values, p_value, cohen_f2 = utils.polynomial_regression_analysis(x, y, 1)
 
         # Print a description of the results
         # Determine significance level
-        precision = 6
+        precision = 3
         format_string = f".{precision}f"
 
         p_value = round(p_value, precision)
@@ -241,24 +241,34 @@ def plot_numerical(
         else:
             message = f'We observe **no statistically significant** impact of "{independent_var_label}" on "{metric_label}" (p-value: {p_value_string})'
 
-        if p_value < 0.1:
+        if cohen_f2 < 0.02:
+            message += f", with a **negligible effect size** (Cohen's f²: {cohen_f2:.3f}),"
+        elif cohen_f2 < 0.15:
+            message += f", with a **small effect size** (Cohen's f²: {cohen_f2:.3f}),"
+        elif cohen_f2 < 0.35:
+            message += f", with a **moderate effect size** (Cohen's f²: {cohen_f2:.3f}),"
+        else:
+            message += f", with a **large effect size** (Cohen's f²: {cohen_f2:.3f}),"
+
+        if p_value < 0.1 and cohen_f2 >= 0.15:
+            ## _Seems_ like t should be a strong relationship
             if r2 >= 0.5:
                 message += f" explaining {r2_string} of the variance, indicating a **strong relationship**."
             elif r2 >= 0.25:
                 message += f" explaining {r2_string} of the variance, indicating a **moderate relationship**."
             elif r2 >= 0.05:
-                message += f", however, only {r2_string} of the variance is explained, indicating a **weak relationship**."
+                message += f" however, only {r2_string} of the variance is explained, indicating a **weak relationship**."
             else:
-                message += f", however, only {r2_string} of the variance is explained, indicating a **negligible relationship**."
+                message += f" however, only {r2_string} of the variance is explained, indicating a **negligible relationship**."
         else:
             if r2 >= 0.14:
                 message += f" explaining {r2_string} of the variance, indicating a **strong relationship**."
             elif r2 >= 0.06:
                 message += f" explaining {r2_string} of the variance, indicating a **moderate relationship**."
             elif r2 >= 0.01:
-                message += f" explaining {r2_string} of the variance, indicating a **weak relationship**."
+                message += f" explaining only {r2_string} of the variance, indicating a **weak relationship**."
             else:
-                message += f" explaining {r2_string} of the variance, indicating a **negligible relationship**."
+                message += f" explaining only {r2_string} of the variance, indicating a **negligible relationship**."
 
         # # Combine the messages
         st.write(message)
@@ -349,7 +359,7 @@ def do_achievements():
     # calculate a trend line
     x = df_known_achievements["achievements_count"]
     y = df_known_achievements["steam_positive_review_ratio"]
-    trend_line, r2, _, _ = utils.get_trend_line_r2_and_p(x, y)
+    trend_line, r2, individual_p_values, p_value, cohen_f2 = utils.polynomial_regression_analysis(x, y)
 
     st.write(f"""We do not however observe a strong correlation (R^2={r2:.3f}) between the number of achievements and the review score:""")
 
@@ -393,7 +403,7 @@ def do_time_to_beat():
     # calculate a trend line
     x = df_known_time_to_beat["average_time_to_beat"]
     y = df_known_time_to_beat["steam_positive_review_ratio"]
-    trend_line, r2, _, _ = utils.get_trend_line_r2_and_p(x, y)
+    trend_line, r2, individual_p_values, p_value, cohen_f2 = utils.polynomial_regression_analysis(x, y)
 
     st.write(f"""We do not however observe a strong correlation (R^2={r2:.3f}) between the duration of a game and its review score:""")
 
@@ -518,7 +528,7 @@ with st.spinner("Running...", show_time=True):
 ##############################
 def do_early_access():
     st.header("Game Difficulty")
-    st.write("Here we analyze the impact of game difficulty ratings (as defined by GameFAQs) on critical reception.")
+    st.write("Here we analyze the relationship between game difficulty ratings (as defined by GameFAQs) and critical reception.")
 
     df_difficulty = df_filtered.copy()
 
@@ -598,20 +608,6 @@ plot_categorical(
 ##############################
 # languages_supported _count_
 ##############################
-# # Introduce temporary column of the number of languages supported
-# df_filtered["languages_supported_count"] = df_filtered["languages_supported"].apply(lambda x: len(x))
-
-# plot_continuous(
-#     df=df_filtered,
-#     metric_column="steam_positive_review_ratio",
-#     independent_var_column="languages_supported_count",
-#     header="Languages Supported",
-#     # body="This suggests that offering a demo has no significant impact on the review score of a game.",
-#     metric_label="Review Score",
-#     independent_var_label="Number of Languages Supported",
-# )
-
-
 temp_df = df_filtered.copy()
 
 temp_df = temp_df.dropna(subset=["languages_supported"])
@@ -641,25 +637,6 @@ plot_numerical(
 ##############################
 # languages_with_full_audio _count_
 ##############################
-# # Introduce temporary column of the number of languages supported
-# df_filtered["languages_supported_count"] = df_filtered["languages_supported"].apply(lambda x: len(x))
-
-# plot_continuous(
-#     df=df_filtered,
-#     metric_column="steam_positive_review_ratio",
-#     independent_var_column="languages_supported_count",
-#     header="Languages Supported",
-#     # body="This suggests that offering a demo has no significant impact on the review score of a game.",
-#     metric_label="Review Score",
-#     independent_var_label="Number of Languages Supported",
-# )
-
-
-# Sanity check, prind a bunch fo random game names and their review score
-st.write(df_filtered.sample(10)[["name", "steam_positive_review_ratio"]])
-st.write(df_all_in_year_range.sample(10)[["name", "steam_positive_review_ratio"]])
-
-
 temp_df = df_filtered.copy()
 
 temp_df = temp_df.dropna(subset=["languages_with_full_audio"])
@@ -726,49 +703,6 @@ plot_numerical(
 # runs_on_linux	runs_on_mac	runs_on_steam_deck	runs_on_windows
 
 
-## TODO: TUrn these into a single "side by side" set of bars, and remove NaNs, they only muddy the picture
-
-plot_categorical(
-    df=df_filtered,
-    metric_column="steam_positive_review_ratio",
-    category_column="runs_on_windows",
-    header="Runs on windows",
-    # body_before="This suggests that the platform a game runs on has no significant impact on the review score.",
-    metric_label="Review Score",
-    category_label="Runs on windows",
-)
-
-plot_categorical(
-    df=df_filtered,
-    metric_column="steam_positive_review_ratio",
-    category_column="runs_on_mac",
-    header="Runs on mac",
-    # body_before="This suggests that the platform a game runs on has no significant impact on the review score.",
-    metric_label="Review Score",
-    category_label="Runs on mac",
-)
-
-plot_categorical(
-    df=df_filtered,
-    metric_column="steam_positive_review_ratio",
-    category_column="runs_on_linux",
-    header="Runs on linux",
-    # body_before="This suggests that the platform a game runs on has no significant impact on the review score.",
-    metric_label="Review Score",
-    category_label="Runs on linux",
-)
-
-plot_categorical(
-    df=df_filtered,
-    metric_column="steam_positive_review_ratio",
-    category_column="runs_on_steam_deck",
-    header="Runs on steam deck",
-    # body_before="This suggests that the platform a game runs on has no significant impact on the review score.",
-    metric_label="Review Score",
-    category_label="Runs on steam deck",
-)
-
-
 def do_runs_on_platform():
     st.header("Platform Support")
 
@@ -791,7 +725,7 @@ def do_runs_on_platform():
             f"""
             The findings are as follows:
 
-            Though all platform support had a small to moderate effect size, only the Linux and Mac support had a statistically significant impact on the review score.
+            Though all platform support had a small to moderate effect size, only the Linux and Mac support had a statistically significant association with review scores.
 
             - **Windows**: p-value: {win_p_value:{format_string}}, r-squared: {win_r_squared:{format_string}}, Cohen's d: {win_cohen_d:{format_string}}
             - **Mac**: p-value: {mac_p_value:{format_string}}, r-squared: {mac_r_squared:{format_string}}, Cohen's d: {mac_cohen_d:{format_string}}
@@ -821,3 +755,64 @@ def do_runs_on_platform():
 
 
 do_runs_on_platform()
+
+
+##############################
+# steam_store_movie_count
+##############################
+
+df_temp = df_filtered.copy()
+
+# remove N% outliers in terms of number of movies
+q_low, q_high = df_temp["steam_store_movie_count"].quantile([0.01, 0.99])
+df_temp = df_temp[(df_temp["steam_store_movie_count"] >= q_low) & (df_temp["steam_store_movie_count"] <= q_high)]
+
+
+plot_numerical(
+    df=df_temp,
+    metric_column="steam_positive_review_ratio",
+    independent_var_column="steam_store_movie_count",
+    header="Number of Trailers",
+    body_before="This suggests that the number of trailers a game has has no significant impact on the review score.",
+    metric_label="Review Score",
+    independent_var_label="Number of Trailers",
+)
+
+
+##############################
+# steam_store_screenshot_count
+##############################
+
+df_temp = df_filtered.copy()
+
+# remove N% outliers in terms of number of screenshots
+q_low, q_high = df_temp["steam_store_screenshot_count"].quantile([0.01, 0.99])
+df_temp = df_temp[(df_temp["steam_store_screenshot_count"] >= q_low) & (df_temp["steam_store_screenshot_count"] <= q_high)]
+
+plot_numerical(
+    df=df_temp,
+    metric_column="steam_positive_review_ratio",
+    independent_var_column="steam_store_screenshot_count",
+    header="Number of Screenshots",
+    body_before="This suggests that the number of screenshots a game has has no significant impact on the review score.",
+    metric_label="Review Score",
+    independent_var_label="Number of Screenshots",
+)
+
+
+##############################
+# tags _count_
+##############################
+
+# Introduce temporary column of the number of tags
+df_filtered["tags_count"] = df_filtered["tags"].apply(lambda x: len(x))
+
+plot_numerical(
+    df=df_filtered,
+    metric_column="steam_positive_review_ratio",
+    independent_var_column="tags_count",
+    header="Number of Tags",
+    body_after="This suggests that the number of tags a game has is weakly associated with higher review scores.",
+    metric_label="Review Score",
+    independent_var_label="Number of Tags",
+)
