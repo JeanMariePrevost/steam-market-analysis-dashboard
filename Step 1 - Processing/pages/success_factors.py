@@ -60,6 +60,95 @@ st.sidebar.markdown("---")
 #     Suggested value: 10,000 for general trends, 2,000 to include more unsuccessful titles."""
 # )
 
+
+############################################
+# Helper Functions
+############################################
+def plot_categorical(
+    df: pd.DataFrame, metric_column: str, category_column: str, header: str, body: str = None, control_for_yearly_trends: bool = True, metric_label: str = None, category_label: str = None
+):
+    """
+    Plots a bar chart of a categorical variable against a metric variable.
+    """
+
+    if metric_label is None:
+        metric_label = metric_column
+    if category_label is None:
+        category_label = category_column
+
+    st.header(header)
+
+    with st.spinner("Running...", show_time=True):
+        # introduce a temproary column of the unique values of the category column, and "unknown" for NaN
+        temp_category_column = f"{category_column}_temp"
+        df[temp_category_column] = df[category_column].fillna("unknown").astype(str)
+
+        # # Sanity checks
+        # st.write(df[temp_category_column].value_counts())
+        # st.write(df.groupby(category_column)[metric_column].mean())
+        # st.write(df.groupby(temp_category_column)[metric_column].mean())
+
+        # normalize review scores against yearly trends
+        if control_for_yearly_trends:
+            df[metric_column] = utils.normalize_metric_across_groups(df, metric_column, "release_year", method="diff")
+
+        # # Sanity checks
+        # st.write(df[temp_category_column].value_counts())
+        # st.write(df.groupby(category_column)[metric_column].mean())
+        # st.write(df.groupby(temp_category_column)[metric_column].mean())
+
+        # Test for significance
+        f_stat, p_value, eta_squared = utils.anova_categorical(df, metric_column, temp_category_column)
+
+        # st.write(f"ANOVA test results: F-statistic: {f_stat:.2f}, p-value: {p_value:.2f}, eta-squared: {eta_squared:.2f}")
+
+        if body:
+            st.write(body)
+
+        # Print a description of the results
+        # Determine significance level
+        if p_value < 0.05:
+            significance_msg = f'We note a **statistically significant** impact of "{category_label}" on "{metric_label}" (p-value: {p_value:.3f})'
+        elif p_value < 0.1:
+            significance_msg = f'We note a **potentially significant** impact of "{category_label}" on "{metric_label}" (p-value: {p_value:.3f})'
+        else:
+            significance_msg = f'We observe **no statistically significant** impact of "{category_label}" on "{metric_label}" (p-value: {p_value:.3f})'
+
+        # Determine effect size interpretation
+        if eta_squared >= 0.14:
+            effect_msg = f"with a **strong effect** (η²: {eta_squared:.3f})."
+        elif eta_squared >= 0.06:
+            effect_msg = f"with a **moderate effect** (η²: {eta_squared:.3f})."
+        elif eta_squared >= 0.01:
+            effect_msg = f"with a **small effect** (η²: {eta_squared:.3f})."
+        else:
+            effect_msg = f"but the effect is **negligible** (η²: {eta_squared:.3f})."
+
+        # Combine the messages
+        st.write(f"{significance_msg} {effect_msg}")
+
+        # group by category_column
+        df = (
+            df.groupby(temp_category_column)
+            .agg(
+                {
+                    metric_column: "mean",
+                    "release_year": "mean",
+                }
+            )
+            .reset_index()
+        )
+
+        # Plot as a bar chart
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.bar(df[temp_category_column], df[metric_column], alpha=0.7)
+        ax.set_xlabel(category_label)
+        ax.set_ylabel(metric_label)
+        ax.set_title(f"Mean {metric_label} by {category_label}")
+        ax.legend()
+        st.pyplot(fig)
+
+
 ############################################
 # Preparation and setup
 ############################################
@@ -216,7 +305,7 @@ def do_controller_support():
     # normalize review scores against yearly trends
     df_controller_support["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_controller_support, "steam_positive_review_ratio", "release_year", method="diff")
 
-    _, p_value = utils.anova_categorical(df_controller_support, "steam_positive_review_ratio", "controller_support")
+    f_stat, p_value, eta_squared = utils.anova_categorical(df_controller_support, "steam_positive_review_ratio", "controller_support")
 
     st.write(f"We observe no measurable impact of controller support on the review score of games when controlling for release year (p-value: {p_value:.2f}).")
 
@@ -266,7 +355,7 @@ def do_early_access():
     # normalize review scores against yearly trends
     df_early_access["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_early_access, "steam_positive_review_ratio", "release_year", method="diff")
 
-    _, p_value = utils.anova_categorical(df_early_access, "steam_positive_review_ratio", "early_access")
+    f_stat, p_value, eta_squared = utils.anova_categorical(df_early_access, "steam_positive_review_ratio", "early_access")
     st.write(f"We observe no significant impact of early access status on review scores when controlling for year of release, and no meaningful coorelation (p-value: {p_value:.2f}).")
 
     # group by controller support values
@@ -315,7 +404,7 @@ def do_early_access():
     # normalize review scores against yearly trends
     df_difficulty["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_difficulty, "steam_positive_review_ratio", "release_year", method="diff")
 
-    _, p_value = utils.anova_categorical(df_difficulty, "steam_positive_review_ratio", "gamefaqs_difficulty_rating")
+    f_stat, p_value, eta_squared = utils.anova_categorical(df_difficulty, "steam_positive_review_ratio", "gamefaqs_difficulty_rating")
     st.write(f"(p-value: {p_value:.2f}).")
 
     # group by controller support values
@@ -350,13 +439,6 @@ def do_early_access():
     df_difficulty = df_difficulty.sort_values("gamefaqs_difficulty_rating", ascending=False)
 
     # Plot as a bar chart
-    # fig, ax = plt.subplots(figsize=(10, 6))
-    # ax.bar(df_difficulty["gamefaqs_difficulty_rating"], df_difficulty["steam_positive_review_ratio"], alpha=0.7)
-    # ax.set_xlabel("Game Difficulty Rating")
-    # ax.set_ylabel("Mean Review Score")
-    # ax.set_title("Mean Review Score by Game Difficulty Rating")
-    # ax.legend()
-    # st.pyplot(fig)
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.barh(df_difficulty["gamefaqs_difficulty_rating"], df_difficulty["steam_positive_review_ratio"], alpha=0.7)
     ax.set_ylabel("Game Difficulty Rating")
@@ -368,3 +450,18 @@ def do_early_access():
 
 with st.spinner("Running...", show_time=True):
     do_early_access()
+
+
+##############################
+# has_demos
+##############################
+
+plot_categorical(
+    df=df_filtered,
+    metric_column="steam_positive_review_ratio",
+    category_column="has_demos",
+    header="Game Demos",
+    body="This suggests that offering a demo has no significant impact on the review score of a game.",
+    metric_label="Review Score",
+    category_label="Has a Demo",
+)

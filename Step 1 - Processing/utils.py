@@ -3,7 +3,9 @@ import os
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
+import statsmodels.api as sm
 from scipy.stats import norm
+from statsmodels.formula.api import ols
 
 
 def load_main_dataset() -> pd.DataFrame:
@@ -450,19 +452,28 @@ def anova_categorical(df, numeric_col, cat_col):
         cat_col (str): The name of the categorical column (e.g., "controller_support") which contains multiple groups (e.g., "none", "partial", "full").
 
     Returns:
-        tuple: A tuple containing the F-statistic and p-value from the one-way ANOVA.
+        tuple: A tuple containing the F-statistic, p-value, and eta-squared (η²) effect size.
+
 
     Example usage:
-        F_stat, p_value = anova_categorical(df, "steam_positive_review_ratio", "controller_support")
-        print(f"F-statistic: {F_stat:.3f}, p-value: {p_value:.3f}")
+        F_stat, p_value, eta_sq = anova_categorical(df, "steam_positive_review_ratio", "controller_support")
+        print(f"F-statistic: {F_stat:.3f}, p-value: {p_value:.3f}, eta²: {eta_sq:.4f}")
     """
+    # Drop NaNs
+    df = df[[numeric_col, cat_col]].dropna()
+
     # Group the data by the categorical column and extract the numeric data for each group
-    groups = [group[numeric_col].dropna() for _, group in df.groupby(cat_col)]
+    groups = [group[numeric_col] for _, group in df.groupby(cat_col)]
 
     if len(groups) < 2:
         raise ValueError(f"Column '{cat_col}' must have at least 2 groups. Found only {len(groups)} group(s).")
 
-    # Perform one-way ANOVA to compare the means across the groups
+    # Perform one-way ANOVA
     F_stat, p_value = stats.f_oneway(*groups)
 
-    return F_stat, p_value
+    # Compute Eta-Squared (η²) for effect size
+    model = ols(f"{numeric_col} ~ C({cat_col})", data=df).fit()
+    anova_table = sm.stats.anova_lm(model, typ=2)
+    eta_sq = anova_table["sum_sq"][0] / anova_table["sum_sq"].sum()
+
+    return F_stat, p_value, eta_sq
