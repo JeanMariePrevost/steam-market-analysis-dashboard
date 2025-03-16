@@ -317,6 +317,11 @@ st.write(
          **{selected_year_range[0]} and {selected_year_range[1]}**, based on **{df_filtered.shape[0]} unique titles**."""
 )
 
+st.warning(
+    "**Note:** This analysis identifies statistical relationships between variables but does not establish causation or the direction of influence. "
+    "Any observed associations should not be interpreted as direct cause-and-effect relationships."
+)
+
 
 # Warn user if there are fewer than N games in df_filtered
 if df_filtered.shape[0] < 50:
@@ -815,4 +820,19 @@ plot_numerical(
     body_after="This suggests that the number of tags a game has is weakly associated with higher review scores.",
     metric_label="Review Score",
     independent_var_label="Number of Tags",
+)
+
+
+##############################
+# vr_supported
+##############################
+
+plot_categorical(
+    df=df_filtered,
+    metric_column="steam_positive_review_ratio",
+    category_column="vr_supported",
+    header="VR Support",
+    # body_before="This suggests that VR support has no significant impact on the review score of a game.",
+    metric_label="Review Score",
+    category_label="VR Supported",
 )
