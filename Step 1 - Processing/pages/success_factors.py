@@ -48,18 +48,13 @@ min_year = int(df["release_year"].min())
 max_year = int(df["release_year"].max())
 selected_year_range = st.sidebar.slider("Select Release Year Range", min_year, max_year, (2010, max_year - 1))
 
-# Sidebar, minimum number of reviews for analysis 2
 st.sidebar.markdown("---")
-# min_review_count = st.sidebar.number_input("Minimum number of reviews for analysis 2", value=10, min_value=1)
-# st.sidebar.caption("Median review scores for games with fewer reviews may not be representative. Suggested value: 10.")
 
-# # Sidebar, minimum number of owners for analysis 3
-# min_owners_count = st.sidebar.number_input("Minimum number of owners for analysis 3", value=10000, min_value=0)
-# st.sidebar.caption(
-#     """Since 2014 steam has had an issue with shovelware and fake games,
-#     setting a reasonable minimum can help focus the analysis on more "serious" releases.
-#     Suggested value: 10,000 for general trends, 2,000 to include more unsuccessful titles."""
-# )
+target_metric = st.sidebar.radio("Select a target metric:", ["Review Scores", "Estimated Owners"])
+
+st.sidebar.markdown("---")
+min_review_count = st.sidebar.number_input("Minimum number of reviews per game", value=10, min_value=1)
+st.sidebar.caption("Games with very few reviews have a high chance of being fake or having skewed review scores. Suggested value: 10.")
 
 
 ############################################
@@ -93,31 +88,18 @@ def plot_categorical(
         # introduce a temporary column of the unique values of the category column, and "unknown" for NaN
         temp_category_column = f"{category_column}_temp"
         df[temp_category_column] = df[category_column].astype(str).fillna("unknown")
-
-        # # Sanity checks
-        # st.write(df[temp_category_column].value_counts())
-        # st.write(df.groupby(category_column)[metric_column].mean())
-        # st.write(df.groupby(temp_category_column)[metric_column].mean())
-
-        # normalize review scores against yearly trends
+        # normalize review scores against yearly trends (e.g. ratings tend to go up over time)
         if control_for_yearly_trends:
             df[metric_column] = utils.normalize_metric_across_groups(df, metric_column, "release_year", method="diff")
 
-        # # Sanity checks
-        # st.write(df[temp_category_column].value_counts())
-        # st.write(df.groupby(category_column)[metric_column].mean())
-        # st.write(df.groupby(temp_category_column)[metric_column].mean())
-
         # Test for significance
         f_stat, p_value, eta_squared = utils.anova_categorical(df, metric_column, temp_category_column)
-
-        # st.write(f"ANOVA test results: F-statistic: {f_stat:.2f}, p-value: {p_value:.2f}, eta-squared: {eta_squared:.2f}")
 
         if body_before:
             st.write(body_before)
 
         # Print a description of the results
-        # Determine significance level
+        # Determine significance level and effect size
         precision = 6
         format_string = f".{precision}f"
 
@@ -142,22 +124,22 @@ def plot_categorical(
 
         if p_value < 0.1:
             if eta_squared >= 0.14:
-                message += f" with a **strong effect size** (η²: {eta_squared_string})."
+                message += f" explaining {eta_squared_string} of the variance, indicating a **strong relationship**."
             elif eta_squared >= 0.06:
-                message += f" with a **moderate effect size** (η²: {eta_squared_string})."
+                message += f" explaining {eta_squared_string} of the variance, indicating a **moderate relationship**."
             elif eta_squared >= 0.01:
-                message += f", however, the effect is **small** (η²: {eta_squared_string})."
+                message += f", however, only {eta_squared_string} of the variance is explained, indicating a **weak relationship**."
             else:
-                message += f", however, the effect is **negligible** (η²: {eta_squared_string})."
+                message += f", however, only {eta_squared_string} of the variance is explained, indicating a **negligible relationship**."
         else:
             if eta_squared >= 0.14:
-                message += f" with a **strong effect size** (η²: {eta_squared_string})."
+                message += f" explaining {eta_squared_string} of the variance, indicating a **strong relationship**."
             elif eta_squared >= 0.06:
-                message += f" with a **moderate effect size** (η²: {eta_squared_string})."
+                message += f" explaining {eta_squared_string} of the variance, indicating a **moderate relationship**."
             elif eta_squared >= 0.01:
-                message += f" with a **small effect size** (η²: {eta_squared_string})."
+                message += f" explaining only {eta_squared_string} of the variance, indicating a **weak relationship**."
             else:
-                message += f" and the effect is **negligible** (η²: {eta_squared_string})."
+                message += f" explaining only {eta_squared_string} of the variance, indicating a **negligible relationship**."
 
         # Combine the messages
         st.write(message)

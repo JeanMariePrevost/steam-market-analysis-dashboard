@@ -512,8 +512,7 @@ def anova_categorical(df, numeric_col, cat_col):
         cat_col (str): The name of the categorical column (e.g., "controller_support") which contains multiple groups (e.g., "none", "partial", "full").
 
     Returns:
-        tuple: A tuple containing the F-statistic, p-value, and eta-squared (η²) effect size.
-
+        tuple: A tuple containing the F-statistic, p-value, and eta-squared (η²) proportion of variance explained.
 
     Example usage:
         F_stat, p_value, eta_sq = anova_categorical(df, "steam_positive_review_ratio", "controller_support")
