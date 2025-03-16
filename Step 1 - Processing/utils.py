@@ -335,9 +335,9 @@ def median_confidence_intervals(df, value_col, group_col, confidence=0.95):
     return result_df
 
 
-def get_trend_line_r2_and_p(x, y, degree=1):
+def polynomial_regression_analysis(x, y, degree=1):
     """
-    Calculate the trend line, r² value, individual p-values, and global p-value for polynomial regression.
+    Calculate the trend line, r² value, individual p-values, global p-value and Cohen's f² effect size for a polynomial fit.
 
     Parameters:
         x (array-like): Independent variable data.
@@ -349,6 +349,7 @@ def get_trend_line_r2_and_p(x, y, degree=1):
         r2 (float): The coefficient of determination (r²).
         p_values (list): List of p-values for each model parameter (starting with the intercept at index 0).
         global_p_value (float): Overall p-value for model significance.
+        cohen_f2 (float): Effect size using Cohen's f².
 
     Example usage:
         trend_line, r2, p_values, global_p = get_trend_line_and_r2_p(x, y, degree=2)
@@ -373,6 +374,9 @@ def get_trend_line_r2_and_p(x, y, degree=1):
     ss_tot = np.sum((y - np.mean(y)) ** 2)
     r2 = 1 - (ss_res / ss_tot)
 
+    # Compute effect size using Cohen's f²: f² = r² / (1 - r²)
+    cohen_f2 = r2 / (1 - r2) if r2 != 1 else np.inf
+
     # Construct polynomial features for regression EXCLUDING the constant (i.e. how each individual parameter affects the model)
     # For degree=1, this yields just the x values; for degree=2, [x, x^2], etc.
     X = np.column_stack([x**i for i in range(1, degree + 1)])
@@ -386,7 +390,7 @@ def get_trend_line_r2_and_p(x, y, degree=1):
     # Global p-value from the F-test for _overall_ model significance (for degree>1)
     global_p_value = model.f_pvalue
 
-    return trend_line, r2, p_values, global_p_value
+    return trend_line, r2, p_values, global_p_value, cohen_f2
 
 
 def normalize_metric_across_groups(df, metric_col, group_col="release_year", method="zscore") -> pd.Series:
