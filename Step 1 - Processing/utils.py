@@ -389,7 +389,7 @@ def get_trend_line_r2_and_p(x, y, degree=1):
     return trend_line, r2, p_values, global_p_value
 
 
-def normalize_metric_across_groups(df, metric_col, group_col="release_year", method="zscore"):
+def normalize_metric_across_groups(df, metric_col, group_col="release_year", method="zscore") -> pd.Series:
     """
     Normalizes a metric column based on grouping.
     E.g. get the infliation-adjusted price for each year as opposed to the raw price.
@@ -441,17 +441,56 @@ def ttest_two_groups(df, numeric_col, cat_col):
         _, p_value = compare_two_groups_ttest(df, "steam_positive_review_ratio", "early_access")
         print(f"p-value: {p_value:.3f}")
     """
-    groups = df[cat_col].dropna().unique()
-    if len(groups) != 2:
-        raise ValueError(f"Column '{cat_col}' must have exactly 2 unique groups. Found: {groups}")
 
-    group1 = df[df[cat_col] == groups[0]][numeric_col]
-    group2 = df[df[cat_col] == groups[1]][numeric_col]
+    # Confirm columns exist
+    if numeric_col not in df.columns or cat_col not in df.columns:
+        raise ValueError(f"Columns must exist in DataFrame. Check '{numeric_col}' and '{cat_col}'")
+
+    # Filter out rows where either column has NaN values
+    valid_data = df.dropna(subset=[numeric_col, cat_col])
+
+    # Confirm exactly 2 groups
+    group_labels = valid_data[cat_col].unique()
+    if len(group_labels) != 2:
+        raise ValueError(f"Column '{cat_col}' must have exactly 2 unique groups. Found: {group_labels}")
+
+    # Split the data into two groups
+    group1 = valid_data[valid_data[cat_col] == group_labels[0]][numeric_col]
+    group2 = valid_data[valid_data[cat_col] == group_labels[1]][numeric_col]
+
+    # Debug
+    print(f"Group 1 ({group_labels[0]}) size: {len(group1)}, mean: {group1.mean() if len(group1) > 0 else 'N/A'}")
+    print(f"Group 2 ({group_labels[1]}) size: {len(group2)}, mean: {group2.mean() if len(group2) > 0 else 'N/A'}")
+
+    if len(group1) < 2 or len(group2) < 2:
+        print("ERROR: Each group must have at least 2 valid observations for t-test.")
+        return None, None
+
+    if not pd.api.types.is_numeric_dtype(valid_data[numeric_col]):
+        print("ERROR: The numeric column must contain numerical data.")
+        return None, None
+
+    # More robust check for zero variance
+    if group1.std() < 1e-10 or group2.std() < 1e-10:
+        print("ERROR: One of the groups has zero variance. Cannot perform t-test.")
+        return None, None
 
     # Perform Welch's t-test
-    t_stat, p_value = stats.ttest_ind(group1, group2, equal_var=False)
+    t_stat, p_value = stats.ttest_ind(group1, group2, equal_var=False, nan_policy="raise")
 
-    return t_stat, p_value
+    # Calculate r_squared (effect size)
+    df = len(group1) + len(group2) - 2
+    r_squared = t_stat**2 / (t_stat**2 + df)
+
+    # Calculate Cohen's d using pooled standard deviation
+    n1, n2 = len(group1), len(group2)
+    mean1, mean2 = group1.mean(), group2.mean()
+    s1, s2 = group1.std(ddof=1), group2.std(ddof=1)
+    pooled_std = ((n1 - 1) * s1**2 + (n2 - 1) * s2**2) / (n1 + n2 - 2)
+    pooled_std = pooled_std**0.5
+    cohen_d = (mean1 - mean2) / pooled_std
+
+    return t_stat, p_value, r_squared, cohen_d
 
 
 from scipy import stats
