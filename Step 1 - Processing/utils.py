@@ -335,41 +335,58 @@ def median_confidence_intervals(df, value_col, group_col, confidence=0.95):
     return result_df
 
 
-def get_trend_line_and_r2(x, y, degree=1):
+def get_trend_line_r2_and_p(x, y, degree=1):
     """
-    Calculate the trend line and r² value for the provided data.
+    Calculate the trend line, r² value, individual p-values, and global p-value for polynomial regression.
 
     Parameters:
         x (array-like): Independent variable data.
         y (array-like): Dependent variable data.
-        degree (int): Degree of the polynomial fit (default is 1 for linear).
+        degree (int): Degree of the polynomial fit.
 
     Returns:
         trend_line (np.poly1d): The polynomial function representing the trend line.
-        r2 (float): The coefficient of determination (r²) for the fit.
+        r2 (float): The coefficient of determination (r²).
+        p_values (list): List of p-values for each model parameter (starting with the intercept at index 0).
+        global_p_value (float): Overall p-value for model significance.
 
     Example usage:
-        x = df_sorted["achievements_count"]
-        y = df_sorted["steam_positive_review_ratio"]
-        trend_line, r2 = get_trend_line_and_r2(x, y)
-        print("r²:", r2)
-        ax.plot(x, trend_line(x), label="Trend Line", color="red", linestyle="--")
+        trend_line, r2, p_values, global_p = get_trend_line_and_r2_p(x, y, degree=2)
+        print(f"R²: {r2:.3f}, Global p-value: {global_p:.3f}, Individual p-values: {p_values}")
     """
-    # Fit a polynomial of the specified degree
+    # Convert inputs to numpy arrays
+    x = np.array(x)
+    y = np.array(y)
+
+    # Drop nan values
+    mask = ~np.isnan(x) & ~np.isnan(y)
+    x = x[mask]
+    y = y[mask]
+
+    # Fit a polynomial of the specified degree using np.polyfit (coefficients in descending order)
     coeffs = np.polyfit(x, y, degree)
     trend_line = np.poly1d(coeffs)
 
-    # Predicted y-values from the trend line
+    # Compute predicted values and R²
     y_pred = trend_line(x)
-
-    # Calculate the sum of squared residuals and total sum of squares
     ss_res = np.sum((y - y_pred) ** 2)
     ss_tot = np.sum((y - np.mean(y)) ** 2)
-
-    # Compute the coefficient of determination (r²)
     r2 = 1 - (ss_res / ss_tot)
 
-    return trend_line, r2
+    # Construct polynomial features for regression EXCLUDING the constant (i.e. how each individual parameter affects the model)
+    # For degree=1, this yields just the x values; for degree=2, [x, x^2], etc.
+    X = np.column_stack([x**i for i in range(1, degree + 1)])
+    X = sm.add_constant(X)  # Add intercept column
+
+    # Fit the regression model using OLS
+    model = sm.OLS(y, X).fit()
+
+    # Extract individual p-values (first is for the intercept, then for each polynomial term)
+    p_values = model.pvalues.tolist()
+    # Global p-value from the F-test for _overall_ model significance (for degree>1)
+    global_p_value = model.f_pvalue
+
+    return trend_line, r2, p_values, global_p_value
 
 
 def normalize_metric_across_groups(df, metric_col, group_col="release_year", method="zscore"):
