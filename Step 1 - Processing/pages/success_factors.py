@@ -30,6 +30,10 @@ st.markdown(
 
 df = utils.load_main_dataset()
 
+variance_explained_per_variable = {}
+
+minimum_review_score = 0.01  # Minimum review score to consider a game as "not fake"
+
 
 ############################################
 # Sidebar
@@ -70,6 +74,7 @@ def plot_categorical(
     control_for_yearly_trends: bool = True,
     metric_label: str = None,
     category_label: str = None,
+    horizontal: bool = False,
 ):
     """
     Plots a bar chart of a categorical variable against a metric variable.
@@ -144,6 +149,9 @@ def plot_categorical(
         # Combine the messages
         st.write(message)
 
+        # Store the result
+        variance_explained_per_variable[category_column] = eta_squared
+
         if body_after:
             st.write(body_after)
 
@@ -160,14 +168,23 @@ def plot_categorical(
         )
 
         # Plot as a bar chart
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.bar(df[temp_category_column], df[metric_column], alpha=0.7)
-        ax.axhline(0, color="black", linewidth=0.5, alpha=0.4)  # Add a zero line
-        ax.set_xlabel(category_label)
-        ax.set_ylabel(metric_label)
-        ax.set_title(f"Mean {metric_label} by {category_label}")
-        ax.legend()
-        st.pyplot(fig)
+        if horizontal:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.barh(df[temp_category_column], df[metric_column], alpha=0.7)
+            ax.set_ylabel(category_label)
+            ax.set_xlabel(metric_label)
+            ax.set_title(f"Mean {metric_label} by {category_label}")
+            ax.legend()
+            st.pyplot(fig)
+        else:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.bar(df[temp_category_column], df[metric_column], alpha=0.7)
+            ax.axhline(0, color="black", linewidth=0.5, alpha=0.4)  # Add a zero line
+            ax.set_xlabel(category_label)
+            ax.set_ylabel(metric_label)
+            ax.set_title(f"Mean {metric_label} by {category_label}")
+            ax.legend()
+            st.pyplot(fig)
 
 
 def plot_numerical(
@@ -252,8 +269,11 @@ def plot_numerical(
             else:
                 message += f" explaining only {r2_string} of the variance, indicating a **negligible relationship**."
 
-        # # Combine the messages
+        # Combine the messages
         st.write(message)
+
+        # Store the result
+        variance_explained_per_variable[independent_var_column] = r2
 
         if body_after:
             st.write(body_after)
@@ -290,6 +310,13 @@ if selected_tag != "All":
 else:
     df_filtered = df_all_in_year_range
 
+# Filter out games with < N reviews
+df_filtered = df_filtered[df_filtered["steam_total_reviews"] >= min_review_count]
+
+# Filter out games with too low review scores
+df_filtered = df_filtered[df_filtered["steam_positive_review_ratio"] >= minimum_review_score]
+
+
 if df_filtered.empty:
     st.warning("No data available for the selected release year range. Please adjust the filters.")
     st.stop()
@@ -315,266 +342,123 @@ elif df_filtered.shape[0] < 250:
 ##############################
 # Achievements
 ##############################
-def do_achievements():
-    st.header("Achievements")
-    st.write("Here we analyze the impact of achievements on the success of games.")
+df_temp = df_filtered.copy()
 
-    # Separate the unknown (Nan/missing) from known
-    df_known_achievements = df_filtered[df_filtered["achievements_count"] >= 0]
-    # Unkown is everything _not_ in known
-    df_unknown_achievements = df_filtered[~df_filtered.index.isin(df_known_achievements.index)]
+# Drop zero and >100 achievements
+df_temp = df_temp[(df_temp["achievements_count"] > 0) & (df_temp["achievements_count"] < 100)]
 
-    # Filter out games with < N reviews or a zero review score
-    df_known_achievements = df_known_achievements[df_known_achievements["steam_total_reviews"] >= 10]
-    df_unknown_achievements = df_unknown_achievements[df_unknown_achievements["steam_total_reviews"] >= 10]
-    df_known_achievements = df_known_achievements[df_known_achievements["steam_positive_review_ratio"] > 0]
-
-    # Print average review score for games unknown, zero and non-zero achievements
-    st.write(
-        f"""First, we notice that games with achievement have a higher average review score than games without achievements:
-    - Average review score for games with unknown achievements: {df_unknown_achievements['steam_positive_review_ratio'].mean():.2f}
-    - Average review score for games with zero achievements: {df_known_achievements[df_known_achievements['achievements_count'] == 0]['steam_positive_review_ratio'].mean():.2f}
-    - Average review score for games with achievements: {df_known_achievements[df_known_achievements['achievements_count'] > 0]['steam_positive_review_ratio'].mean():.2f}"""
-    )
-
-    # Filter out top and bottom 1% of games by achievements count
-    achievements_count_quantiles = df_known_achievements["achievements_count"].quantile([0.01, 0.99])
-    df_known_achievements = df_known_achievements[
-        (df_known_achievements["achievements_count"] >= achievements_count_quantiles[0.01]) & (df_known_achievements["achievements_count"] <= achievements_count_quantiles[0.99])
-    ]
-
-    # calculate a trend line
-    x = df_known_achievements["achievements_count"]
-    y = df_known_achievements["steam_positive_review_ratio"]
-    trend_line, r2, individual_p_values, p_value, cohen_f2 = utils.polynomial_regression_analysis(x, y)
-
-    st.write(f"""We do not however observe a strong correlation (R^2={r2:.3f}) between the number of achievements and the review score:""")
-
-    # # Scatter plot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.scatter(df_known_achievements["achievements_count"], df_known_achievements["steam_positive_review_ratio"], label="Achievements", alpha=0.5)
-
-    ax.plot(x, trend_line(x), label=f"Trend Line (R^2={r2:.3f})", color="red")
-
-    ax.set_xlabel("Number of Achievements")
-    ax.set_ylabel("Mean Review Score")
-    ax.set_title("Mean Review Score by Number of Achievements")
-    ax.legend()
-    st.pyplot(fig)
-
-
-with st.spinner("Running...", show_time=True):
-    do_achievements()
+plot_numerical(
+    df=df_temp,
+    metric_column="steam_positive_review_ratio",
+    independent_var_column="achievements_count",
+    header="Achievements",
+    body_after="So while we do see an upward trend, it is largely drowned out by the individual variance by title.",
+    metric_label="Review Score",
+    independent_var_label="Number of Achievements",
+)
 
 
 ##############################
 # average_time_to_beat
 ##############################
-def do_time_to_beat():
-    st.header("Game Duration (time to beat)")
-    st.write("Here we analyze the impact of game duration on their reception.")
 
-    # keep only the non-null, > N values
-    df_known_time_to_beat = df_filtered[df_filtered["average_time_to_beat"].notnull() & (df_filtered["average_time_to_beat"] > 0.1)]
+# Drop outliers
+q_low, q_high = df_filtered["average_time_to_beat"].quantile([0.01, 0.99])
+df_temp = df_filtered[(df_filtered["average_time_to_beat"] >= q_low) & (df_filtered["average_time_to_beat"] <= q_high)]
 
-    # Filter out games with < 10 reviews or a zero review score
-    df_known_time_to_beat = df_known_time_to_beat[df_known_time_to_beat["steam_total_reviews"] >= 10]
-    df_known_time_to_beat = df_known_time_to_beat[df_known_time_to_beat["steam_positive_review_ratio"] > 0]
-
-    # Filter out top and bottom 1% of games by average_time_to_beat
-    achievements_count_quantiles = df_known_time_to_beat["average_time_to_beat"].quantile([0.01, 0.99])
-    df_known_time_to_beat = df_known_time_to_beat[
-        (df_known_time_to_beat["average_time_to_beat"] >= achievements_count_quantiles[0.01]) & (df_known_time_to_beat["average_time_to_beat"] <= achievements_count_quantiles[0.99])
-    ]
-
-    # calculate a trend line
-    x = df_known_time_to_beat["average_time_to_beat"]
-    y = df_known_time_to_beat["steam_positive_review_ratio"]
-    trend_line, r2, individual_p_values, p_value, cohen_f2 = utils.polynomial_regression_analysis(x, y)
-
-    st.write(f"""We do not however observe a strong correlation (R^2={r2:.3f}) between the duration of a game and its review score:""")
-
-    # # Scatter plot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.scatter(df_known_time_to_beat["average_time_to_beat"], df_known_time_to_beat["steam_positive_review_ratio"], label="Achievements", alpha=0.5)
-
-    ax.plot(x, trend_line(x), label=f"Trend Line (R^2={r2:.3f})", color="red")
-
-    ax.set_xlabel("Average Time to Beat (hours)")
-    ax.set_ylabel("Mean Review Score")
-    ax.set_title("Mean Review Score by Game Duration")
-    ax.legend()
-    st.pyplot(fig)
-
-
-with st.spinner("Running...", show_time=True):
-    do_time_to_beat()
+plot_numerical(
+    df=df_temp,
+    metric_column="steam_positive_review_ratio",
+    independent_var_column="average_time_to_beat",
+    header="Game Duration (time to beat)",
+    metric_label="Review Score",
+    independent_var_label="Average Time to Beat (hours)",
+)
 
 
 ##############################
 # controller_support
 ##############################
-def do_controller_support():
-    st.header("Controller Support")
-    st.write("Here we analyze the impact of controller support on the success of games.")
 
-    df_controller_support = df_filtered.copy()
+df_temp = df_filtered.copy()
 
-    # Filter out games with < 10 reviews or a zero review score
-    df_controller_support = df_controller_support[df_controller_support["steam_total_reviews"] >= 10]
-    df_controller_support = df_controller_support[df_controller_support["steam_positive_review_ratio"] > 0]
+# Fill controller support NaNs with "unknown"
+df_temp["controller_support"] = df_temp["controller_support"].fillna("unknown")
 
-    # Replace NaN with "Unknown"
-    df_controller_support["controller_support"] = df_controller_support["controller_support"].fillna("unknown")
+# Rename for sorting:
+rename_dict = {
+    "unknown": "unknown",
+    "partial": "2. Partial",
+    "full": "3. Full",
+    "none": "1. None",
+}
 
-    # normalize review scores against yearly trends
-    df_controller_support["steam_positive_review_ratio_norm"] = utils.normalize_metric_across_groups(df_controller_support, "steam_positive_review_ratio", "release_year", method="diff")
+df_temp["controller_support"] = df_temp["controller_support"].map(rename_dict)
 
-    f_stat, p_value, eta_squared = utils.anova_categorical(df_controller_support, "steam_positive_review_ratio_norm", "controller_support")
-
-    st.write(f"We observe no measurable impact of controller support on the review score of games when controlling for release year (p-value: {p_value:.2f}).")
-
-    # group by controller support values
-    df_controller_support = (
-        df_controller_support.groupby("controller_support")
-        .agg(
-            {
-                "steam_positive_review_ratio_norm": "mean",
-                "steam_total_reviews": "count",
-                "release_year": "mean",
-            }
-        )
-        .reset_index()
-    )
-
-    # Plot as a bar chart
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(df_controller_support["controller_support"], df_controller_support["steam_positive_review_ratio_norm"], alpha=0.7)
-    ax.set_xlabel("Controller Support")
-    ax.set_ylabel("Mean Review Score")
-    ax.set_title("Mean Review Score by Controller Support")
-    ax.legend()
-    st.pyplot(fig)
-
-
-with st.spinner("Running...", show_time=True):
-    do_controller_support()
+plot_categorical(
+    df=df_temp,
+    metric_column="steam_positive_review_ratio",
+    category_column="controller_support",
+    header="Controller Support",
+    metric_label="Review Score",
+    category_label="Controller Support",
+)
 
 
 ##############################
 # early_access
 ##############################
-def do_early_access():
-    st.header("Early Access")
-    st.write("Here we analyze the impact of early access on the success of games.")
-
-    df_early_access = df_filtered.copy()
-
-    # Filter out games with < 10 reviews or a zero review score
-    df_early_access = df_early_access[df_early_access["steam_total_reviews"] >= 10]
-    df_early_access = df_early_access[df_early_access["steam_positive_review_ratio"] > 0]
-
-    # Convert all early_access values to strings, mapping booleans appropriately
-    df_early_access["early_access"] = df_early_access["early_access"].apply(lambda x: "yes" if x is True else ("no" if x is False else "unknown"))
-
-    # normalize review scores against yearly trends
-    df_early_access["steam_positive_review_ratio_norm"] = utils.normalize_metric_across_groups(df_early_access, "steam_positive_review_ratio", "release_year", method="diff")
-
-    f_stat, p_value, eta_squared = utils.anova_categorical(df_early_access, "steam_positive_review_ratio_norm", "early_access")
-    st.write(f"We observe no significant impact of early access status on review scores when controlling for year of release, and no meaningful coorelation (p-value: {p_value:.2f}).")
-
-    # group by controller support values
-    df_early_access = (
-        df_early_access.groupby("early_access")
-        .agg(
-            {
-                "steam_positive_review_ratio_norm": "mean",
-                "steam_total_reviews": "count",
-                "release_year": "mean",
-            }
-        )
-        .reset_index()
-    )
-
-    # Plot as a bar chart
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(df_early_access["early_access"], df_early_access["steam_positive_review_ratio_norm"], alpha=0.7)
-    ax.set_xlabel("Early Access")
-    ax.set_ylabel("Mean Review Score")
-    ax.set_title("Mean Review Score by Early Access")
-    ax.legend()
-    st.pyplot(fig)
 
 
-with st.spinner("Running...", show_time=True):
-    do_early_access()
+df_temp = df_filtered.copy()
+
+# Fill NaNs with "unknown"
+df_temp["early_access"] = df_temp["early_access"].fillna("unknown")
+
+plot_categorical(
+    df=df_temp,
+    metric_column="steam_positive_review_ratio",
+    category_column="early_access",
+    header="Early Access",
+    metric_label="Review Score",
+    category_label="Early Access",
+)
 
 
 ##############################
 # gamefaqs_difficulty_rating
 ##############################
-def do_early_access():
-    st.header("Game Difficulty")
-    st.write("Here we analyze the relationship between game difficulty ratings (as defined by GameFAQs) and critical reception.")
 
-    df_difficulty = df_filtered.copy()
+df_temp = df_filtered.copy()
 
-    # Filter out games with < 10 reviews or a zero review score
-    df_difficulty = df_difficulty[df_difficulty["steam_total_reviews"] >= 10]
-    df_difficulty = df_difficulty[df_difficulty["steam_positive_review_ratio"] > 0]
+# Fill missing difficulty ratings with "unknown"
+df_temp["gamefaqs_difficulty_rating"] = df_temp["gamefaqs_difficulty_rating"].fillna("unknown")
 
-    # Convert all early_access values to strings, mapping booleans appropriately
-    df_difficulty["gamefaqs_difficulty_rating"].fillna("unknown", inplace=True)
+# Rename the difficulty ratings
+rename_dict = {
+    "unknown": "unknown",
+    "Simple": "1. Simple",
+    "Simple-Easy": "2. Simple-Easy",
+    "Easy": "3. Easy",
+    "Easy-Just Right": "4. Easy-Just Right",
+    "Just Right": "5. Just Right",
+    "Just Right-Tough": "6. Just Right-Tough",
+    "Tough": "7. Tough",
+    "Tough-Unforgiving": "8. Tough-Unforgiving",
+    "Unforgiving": "9. Unforgiving",
+}
+df_temp["gamefaqs_difficulty_rating"] = df_temp["gamefaqs_difficulty_rating"].map(rename_dict)
 
-    # normalize review scores against yearly trends
-    df_difficulty["steam_positive_review_ratio_norm"] = utils.normalize_metric_across_groups(df_difficulty, "steam_positive_review_ratio", "release_year", method="diff")
-
-    f_stat, p_value, eta_squared = utils.anova_categorical(df_difficulty, "steam_positive_review_ratio_norm", "gamefaqs_difficulty_rating")
-    st.write(f"(p-value: {p_value:.2f}).")
-
-    # group by controller support values
-    df_difficulty = (
-        df_difficulty.groupby("gamefaqs_difficulty_rating")
-        .agg(
-            {
-                "steam_positive_review_ratio_norm": "mean",
-                "steam_total_reviews": "count",
-                "release_year": "mean",
-            }
-        )
-        .reset_index()
-    )
-
-    # Rename the difficulty ratings
-    rename_dict = {
-        "unknown": "unknown",
-        "Simple": "1. Simple",
-        "Simple-Easy": "2. Simple-Easy",
-        "Easy": "3. Easy",
-        "Easy-Just Right": "4. Easy-Just Right",
-        "Just Right": "5. Just Right",
-        "Just Right-Tough": "6. Just Right-Tough",
-        "Tough": "7. Tough",
-        "Tough-Unforgiving": "8. Tough-Unforgiving",
-        "Unforgiving": "9. Unforgiving",
-    }
-    df_difficulty["gamefaqs_difficulty_rating"] = df_difficulty["gamefaqs_difficulty_rating"].map(rename_dict)
-
-    # Sort by difficulty rating
-    df_difficulty = df_difficulty.sort_values("gamefaqs_difficulty_rating", ascending=False)
-
-    # Plot as a bar chart
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.barh(df_difficulty["gamefaqs_difficulty_rating"], df_difficulty["steam_positive_review_ratio_norm"], alpha=0.7)
-    ax.set_ylabel("Game Difficulty Rating")
-    ax.set_xlabel("Mean Review Score")
-    ax.set_title("Mean Review Score by Game Difficulty Rating")
-    ax.legend()
-    st.pyplot(fig)
-
-
-with st.spinner("Running...", show_time=True):
-    do_early_access()
+plot_categorical(
+    df=df_temp,
+    metric_column="steam_positive_review_ratio",
+    category_column="gamefaqs_difficulty_rating",
+    header="Game Difficulty",
+    body_after='Though negligible, we do see an unsurprising preference towards games considered "easy" to "just right", and a dislike of games considered too simple or too difficult.',
+    metric_label="Review Score",
+    category_label="Game Difficulty Rating",
+    horizontal=True,
+)
 
 
 ##############################
@@ -586,7 +470,6 @@ plot_categorical(
     metric_column="steam_positive_review_ratio",
     category_column="has_demos",
     header="Game Demos",
-    body_before="This suggests that offering a demo has no significant impact on the review score of a game.",
     metric_label="Review Score",
     category_label="Has a Demo",
 )
@@ -629,17 +512,8 @@ temp_df = df_filtered.copy()
 temp_df = temp_df.dropna(subset=["languages_with_full_audio"])
 temp_df["languages_with_full_audio_count"] = temp_df["languages_with_full_audio"].apply(lambda x: len(x))
 
-# Drop games with < 10 reviews
-temp_df = temp_df[temp_df["steam_total_reviews"] >= 10]
-
-# Drop games with zero review score
-temp_df = temp_df[temp_df["steam_positive_review_ratio"] > 0]
-
-# Drop games with more than N languages
+# Drop games with more than N languages, which are likely fake
 temp_df = temp_df[temp_df["languages_with_full_audio_count"] < 20]
-
-# Sanity check, prind a bunch fo random game names, their number of languages and the review score
-st.write(temp_df.sample(10)[["name", "languages_with_full_audio_count", "steam_positive_review_ratio"]])
 
 # Rerun the analysis
 plot_numerical(
@@ -720,25 +594,32 @@ def do_runs_on_platform():
             - **Steam Deck**: p-value: {deck_p_value:{format_string}}, r-squared: {deck_r_squared:{format_string}}, Cohen's d: {deck_cohen_d:{format_string}}
             """
         )
-    # List of platform columns to compare
-    platform_columns = ["runs_on_windows", "runs_on_mac", "runs_on_linux", "runs_on_steam_deck"]
 
-    # Melt the DataFrame so that we have a row per game per platform. ("unpivot" the data)
-    # The "Supported" column will have the True/False values.
-    df_melted = df_runs_on.melt(id_vars=["steam_positive_review_ratio"], value_vars=platform_columns, var_name="Platform", value_name="Supported")
+        # Store the result
+        variance_explained_per_variable["runs_on_windows"] = win_r_squared
+        variance_explained_per_variable["runs_on_mac"] = mac_r_squared
+        variance_explained_per_variable["runs_on_linux"] = linux_r_squared
+        variance_explained_per_variable["runs_on_steam_deck"] = deck_r_squared
 
-    # Group by Platform and Supported to compute the mean normalized review score.
-    df_means = df_melted.groupby(["Platform", "Supported"])["steam_positive_review_ratio"].mean().reset_index()
+        # List of platform columns to compare
+        platform_columns = ["runs_on_windows", "runs_on_mac", "runs_on_linux", "runs_on_steam_deck"]
 
-    # Create the bar plot using seaborn (because it automates the grouping)
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(data=df_means, x="Platform", y="steam_positive_review_ratio", hue="Supported", ax=ax)
-    ax.set_title("Mean Normalized Review Score by Platform Support")
-    ax.set_xlabel("Platform")
-    ax.set_ylabel("Mean Normalized Steam Positive Review Ratio")
+        # Melt the DataFrame so that we have a row per game per platform. ("unpivot" the data)
+        # The "Supported" column will have the True/False values.
+        df_melted = df_runs_on.melt(id_vars=["steam_positive_review_ratio"], value_vars=platform_columns, var_name="Platform", value_name="Supported")
 
-    # Display the plot in Streamlit
-    st.pyplot(fig)
+        # Group by Platform and Supported to compute the mean normalized review score.
+        df_means = df_melted.groupby(["Platform", "Supported"])["steam_positive_review_ratio"].mean().reset_index()
+
+        # Create the bar plot using seaborn (because it automates the grouping)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.barplot(data=df_means, x="Platform", y="steam_positive_review_ratio", hue="Supported", ax=ax)
+        ax.set_title("Mean Normalized Review Score by Platform Support")
+        ax.set_xlabel("Platform")
+        ax.set_ylabel("Mean Normalized Steam Positive Review Ratio")
+
+        # Display the plot in Streamlit
+        st.pyplot(fig)
 
 
 do_runs_on_platform()
@@ -818,3 +699,23 @@ plot_categorical(
     metric_label="Review Score",
     category_label="VR Supported",
 )
+
+
+##############################
+# Recap
+##############################
+
+st.header("Summary of Findings")
+
+st.write("Disappointingly, meta-features such as the number of screenshots, achievements or tags all have but very limited impacts on the review score of a game.")
+st.write("We suggest that, if anything, the only significant factors are the platform support and having sufficient tags.")
+results_message = "Here are the proportion of variance explained by each feature, in descending order:"
+
+# Sort the variance explained by each variable
+variance_explained_per_variable = {k: v for k, v in sorted(variance_explained_per_variable.items(), key=lambda item: item[1], reverse=True)}
+
+# Print the variance explained by each variable
+for variable, variance in variance_explained_per_variable.items():
+    results_message += f"\n- **{variable}**: {variance:.3f}"
+
+st.write(results_message)
