@@ -65,7 +65,14 @@ st.sidebar.markdown("---")
 # Helper Functions
 ############################################
 def plot_categorical(
-    df: pd.DataFrame, metric_column: str, category_column: str, header: str, body: str = None, control_for_yearly_trends: bool = True, metric_label: str = None, category_label: str = None
+    df: pd.DataFrame,
+    metric_column: str,
+    category_column: str,
+    header: str,
+    body: str = None,
+    control_for_yearly_trends: bool = True,
+    metric_label: str = None,
+    category_label: str = None,
 ):
     """
     Plots a bar chart of a categorical variable against a metric variable.
@@ -79,7 +86,7 @@ def plot_categorical(
     st.header(header)
 
     with st.spinner("Running...", show_time=True):
-        # introduce a temproary column of the unique values of the category column, and "unknown" for NaN
+        # introduce a temporary column of the unique values of the category column, and "unknown" for NaN
         temp_category_column = f"{category_column}_temp"
         df[temp_category_column] = df[category_column].fillna("unknown").astype(str)
 
@@ -145,6 +152,68 @@ def plot_categorical(
         ax.set_xlabel(category_label)
         ax.set_ylabel(metric_label)
         ax.set_title(f"Mean {metric_label} by {category_label}")
+        ax.legend()
+        st.pyplot(fig)
+
+
+def plot_continuous(
+    df: pd.DataFrame,
+    metric_column: str,
+    independent_var_column: str,
+    header: str,
+    body: str = None,
+    metric_label: str = None,
+    independent_var_label: str = None,
+):
+    """
+    Plots a line chart of a continuous variable against a metric variable.
+    """
+
+    if metric_label is None:
+        metric_label = metric_column
+    if independent_var_label is None:
+        independent_var_label = independent_var_column
+
+    st.header(header)
+
+    with st.spinner("Running...", show_time=True):
+        if body:
+            st.write(body)
+
+        x = df[independent_var_column]
+        y = df[metric_column]
+        trend_line, r2, individual_p_values, p_value = utils.get_trend_line_r2_and_p(x, y, 1)
+
+        # Print a description of the results
+        # Determine significance level
+        format_string = ".6f"
+        if p_value < 0.05:
+            significance_msg = f'We note a **statistically significant** impact of "{independent_var_label}" on "{metric_label}" (p-value: {p_value:{format_string}})'
+        elif p_value < 0.1:
+            significance_msg = f'We note a **potentially significant** impact of "{independent_var_label}" on "{metric_label}" (p-value: {p_value:{format_string}})'
+        else:
+            significance_msg = f'We observe **no statistically significant** impact of "{independent_var_label}" on "{metric_label}" (p-value: {p_value:{format_string}})'
+
+        # Determine effect size interpretation
+        if r2 >= 0.14:
+            effect_msg = f"with a **strong effect** (R^2={r2:{format_string}})."
+        elif r2 >= 0.06:
+            effect_msg = f"with a **moderate effect** (R^2={r2:{format_string}})."
+        elif r2 >= 0.01:
+            effect_msg = f"with a **small effect** (R^2={r2:{format_string}})."
+        else:
+            effect_msg = f"but the effect is **negligible** (R^2={r2:{format_string}})."
+
+        # # Combine the messages
+        st.write(f"{significance_msg} {effect_msg}")
+
+        # Plot as a scatter + trend line
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.scatter(x, y, label="Data", alpha=0.5)
+        ax.plot(x, trend_line(x), label=f"Trend Line (R^2={r2:.3f})", color="red")
+        ax.set_xlabel(independent_var_label)
+        ax.set_ylabel(metric_label)
+        ax.set_title(f"Mean {metric_label} by {independent_var_label}")
         ax.legend()
         st.pyplot(fig)
 
@@ -221,7 +290,7 @@ def do_achievements():
     # calculate a trend line
     x = df_known_achievements["achievements_count"]
     y = df_known_achievements["steam_positive_review_ratio"]
-    trend_line, r2 = utils.get_trend_line_and_r2(x, y)
+    trend_line, r2, _, _ = utils.get_trend_line_r2_and_p(x, y)
 
     st.write(f"""We do not however observe a strong correlation (R^2={r2:.3f}) between the number of achievements and the review score:""")
 
@@ -265,7 +334,7 @@ def do_time_to_beat():
     # calculate a trend line
     x = df_known_time_to_beat["average_time_to_beat"]
     y = df_known_time_to_beat["steam_positive_review_ratio"]
-    trend_line, r2 = utils.get_trend_line_and_r2(x, y)
+    trend_line, r2, _, _ = utils.get_trend_line_r2_and_p(x, y)
 
     st.write(f"""We do not however observe a strong correlation (R^2={r2:.3f}) between the duration of a game and its review score:""")
 
@@ -464,4 +533,49 @@ plot_categorical(
     body="This suggests that offering a demo has no significant impact on the review score of a game.",
     metric_label="Review Score",
     category_label="Has a Demo",
+)
+
+
+##############################
+# languages_supported _count_
+##############################
+# # Introduce temporary column of the number of languages supported
+# df_filtered["languages_supported_count"] = df_filtered["languages_supported"].apply(lambda x: len(x))
+
+# plot_continuous(
+#     df=df_filtered,
+#     metric_column="steam_positive_review_ratio",
+#     independent_var_column="languages_supported_count",
+#     header="Languages Supported",
+#     # body="This suggests that offering a demo has no significant impact on the review score of a game.",
+#     metric_label="Review Score",
+#     independent_var_label="Number of Languages Supported",
+# )
+
+
+temp_df = df_filtered.copy()
+
+temp_df["languages_supported_count"] = temp_df["languages_supported"].apply(lambda x: len(x))
+
+# Drop all nans
+temp_df = temp_df.dropna(subset=["languages_supported"])
+
+# Drop games with < 10 reviews
+temp_df = temp_df[temp_df["steam_total_reviews"] >= 10]
+
+# Drop games with zero review score
+temp_df = temp_df[temp_df["steam_positive_review_ratio"] > 0]
+
+# Drop games with more than N languages
+temp_df = temp_df[temp_df["languages_supported_count"] < 20]
+
+# Rerun the analysis
+plot_continuous(
+    df=temp_df,
+    metric_column="steam_positive_review_ratio",
+    independent_var_column="languages_supported_count",
+    header="Languages Supported",
+    body="Note that games with an extremely high number of languages supported have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible.",
+    metric_label="Review Score",
+    independent_var_label="Number of Languages Supported",
 )
