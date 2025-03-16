@@ -69,7 +69,8 @@ def plot_categorical(
     metric_column: str,
     category_column: str,
     header: str,
-    body: str = None,
+    body_before: str = None,
+    body_after: str = None,
     control_for_yearly_trends: bool = True,
     metric_label: str = None,
     category_label: str = None,
@@ -111,8 +112,8 @@ def plot_categorical(
 
         # st.write(f"ANOVA test results: F-statistic: {f_stat:.2f}, p-value: {p_value:.2f}, eta-squared: {eta_squared:.2f}")
 
-        if body:
-            st.write(body)
+        if body_before:
+            st.write(body_before)
 
         # Print a description of the results
         # Determine significance level
@@ -160,6 +161,9 @@ def plot_categorical(
         # Combine the messages
         st.write(message)
 
+        if body_after:
+            st.write(body_after)
+
         # group by category_column
         df = (
             df.groupby(temp_category_column)
@@ -187,7 +191,8 @@ def plot_numerical(
     metric_column: str,
     independent_var_column: str,
     header: str,
-    body: str = None,
+    body_before: str = None,
+    body_after: str = None,
     metric_label: str = None,
     independent_var_label: str = None,
 ):
@@ -203,8 +208,8 @@ def plot_numerical(
     st.header(header)
 
     with st.spinner("Running...", show_time=True):
-        if body:
-            st.write(body)
+        if body_before:
+            st.write(body_before)
 
         x = df[independent_var_column]
         y = df[metric_column]
@@ -255,6 +260,9 @@ def plot_numerical(
 
         # # Combine the messages
         st.write(message)
+
+        if body_after:
+            st.write(body_after)
 
         # Plot as a scatter + trend line
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -579,7 +587,7 @@ plot_categorical(
     metric_column="steam_positive_review_ratio",
     category_column="has_demos",
     header="Game Demos",
-    body="This suggests that offering a demo has no significant impact on the review score of a game.",
+    body_before="This suggests that offering a demo has no significant impact on the review score of a game.",
     metric_label="Review Score",
     category_label="Has a Demo",
 )
@@ -622,7 +630,7 @@ plot_numerical(
     metric_column="steam_positive_review_ratio",
     independent_var_column="languages_supported_count",
     header="Languages Supported",
-    body="Note that games with an extremely high number of languages supported have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible.",
+    body_before="Note that games with an extremely high number of languages supported have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible.",
     metric_label="Review Score",
     independent_var_label="Number of Languages Supported",
 )
@@ -673,7 +681,38 @@ plot_numerical(
     metric_column="steam_positive_review_ratio",
     independent_var_column="languages_with_full_audio_count",
     header="Languages Full Audio Supported",
-    body="Note that games with an extremely high number of audio languages have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible.",
+    body_before="Note that games with an extremely high number of audio languages have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible.",
     metric_label="Review Score",
     independent_var_label="Number of Languages with Full Audio",
+)
+
+
+##############################
+# price_original
+##############################
+
+temp_df = df_filtered.copy()
+
+# Drop games with < 10 reviews
+temp_df = temp_df[temp_df["steam_total_reviews"] >= 10]
+
+# Drop games with zero review score
+temp_df = temp_df[temp_df["steam_positive_review_ratio"] > 0]
+
+# Drop games with zero price
+temp_df = temp_df[temp_df["price_original"] > 0]
+
+# Drop games with top/bottom 1% price
+q_low, q_high = temp_df["price_original"].quantile([0.01, 0.99])
+temp_df = temp_df[(temp_df["price_original"] >= q_low) & (temp_df["price_original"] <= q_high)]
+
+
+plot_numerical(
+    df=temp_df,
+    metric_column="steam_positive_review_ratio",
+    independent_var_column="price_original",
+    header="Original Price",
+    body_after="This suggests that the original price of a game has no significant impact on its review score.",
+    metric_label="Review Score",
+    independent_var_label="Original Price",
 )
