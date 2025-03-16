@@ -91,7 +91,7 @@ def plot_categorical(
     with st.spinner("Running...", show_time=True):
         # introduce a temporary column of the unique values of the category column, and "unknown" for NaN
         temp_category_column = f"{category_column}_temp"
-        df[temp_category_column] = df[category_column].fillna("unknown").astype(str)
+        df[temp_category_column] = df[category_column].astype(str).fillna("unknown")
 
         # # Sanity checks
         # st.write(df[temp_category_column].value_counts())
@@ -179,6 +179,7 @@ def plot_categorical(
         # Plot as a bar chart
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.bar(df[temp_category_column], df[metric_column], alpha=0.7)
+        ax.axhline(0, color="black", linewidth=0.5, alpha=0.4)  # Add a zero line
         ax.set_xlabel(category_label)
         ax.set_ylabel(metric_label)
         ax.set_title(f"Mean {metric_label} by {category_label}")
@@ -711,8 +712,57 @@ plot_numerical(
     df=temp_df,
     metric_column="steam_positive_review_ratio",
     independent_var_column="price_original",
-    header="Original Price",
-    body_after="This suggests that the original price of a game has no significant impact on its review score.",
+    header="Launch Price",
+    body_after="This suggests that the launch price of a game has no significant impact on its review score.",
     metric_label="Review Score",
     independent_var_label="Original Price",
+)
+
+
+##############################
+# "Runs on"
+##############################
+# runs_on_linux	runs_on_mac	runs_on_steam_deck	runs_on_windows
+
+
+## TODO: TUrn these into a single "side by side" set of bars, and remove NaNs, they only muddy the picture
+
+plot_categorical(
+    df=df_filtered,
+    metric_column="steam_positive_review_ratio",
+    category_column="runs_on_windows",
+    header="Runs on windows",
+    # body_before="This suggests that the platform a game runs on has no significant impact on the review score.",
+    metric_label="Review Score",
+    category_label="Runs on windows",
+)
+
+plot_categorical(
+    df=df_filtered,
+    metric_column="steam_positive_review_ratio",
+    category_column="runs_on_mac",
+    header="Runs on mac",
+    # body_before="This suggests that the platform a game runs on has no significant impact on the review score.",
+    metric_label="Review Score",
+    category_label="Runs on mac",
+)
+
+plot_categorical(
+    df=df_filtered,
+    metric_column="steam_positive_review_ratio",
+    category_column="runs_on_linux",
+    header="Runs on linux",
+    # body_before="This suggests that the platform a game runs on has no significant impact on the review score.",
+    metric_label="Review Score",
+    category_label="Runs on linux",
+)
+
+plot_categorical(
+    df=df_filtered,
+    metric_column="steam_positive_review_ratio",
+    category_column="runs_on_steam_deck",
+    header="Runs on steam deck",
+    # body_before="This suggests that the platform a game runs on has no significant impact on the review score.",
+    metric_label="Review Score",
+    category_label="Runs on steam deck",
 )
