@@ -140,22 +140,22 @@ def plot_categorical(
 
         if p_value < 0.1:
             if eta_squared >= 0.14:
-                message += f"with a **strong effect size** (η²: {eta_squared_string})."
+                message += f" with a **strong effect size** (η²: {eta_squared_string})."
             elif eta_squared >= 0.06:
-                message += f"with a **moderate effect size** (η²: {eta_squared_string})."
+                message += f" with a **moderate effect size** (η²: {eta_squared_string})."
             elif eta_squared >= 0.01:
                 message += f", however, the effect is **small** (η²: {eta_squared_string})."
             else:
                 message += f", however, the effect is **negligible** (η²: {eta_squared_string})."
         else:
             if eta_squared >= 0.14:
-                message += f"with a **strong effect size** (η²: {eta_squared_string})."
+                message += f" with a **strong effect size** (η²: {eta_squared_string})."
             elif eta_squared >= 0.06:
-                message += f"with a **moderate effect size** (η²: {eta_squared_string})."
+                message += f" with a **moderate effect size** (η²: {eta_squared_string})."
             elif eta_squared >= 0.01:
-                message += f"with a **small effect size** (η²: {eta_squared_string})."
+                message += f" with a **small effect size** (η²: {eta_squared_string})."
             else:
-                message += f"and the effect is **negligible** (η²: {eta_squared_string})."
+                message += f" and the effect is **negligible** (η²: {eta_squared_string})."
 
         # Combine the messages
         st.write(message)
@@ -236,22 +236,22 @@ def plot_numerical(
 
         if p_value < 0.1:
             if r2 >= 0.5:
-                message += f"explaining {r2_string} of the variance, indicating a **strong relationship**."
+                message += f" explaining {r2_string} of the variance, indicating a **strong relationship**."
             elif r2 >= 0.25:
-                message += f"explaining {r2_string} of the variance, indicating a **moderate relationship**."
+                message += f" explaining {r2_string} of the variance, indicating a **moderate relationship**."
             elif r2 >= 0.05:
                 message += f", however, only {r2_string} of the variance is explained, indicating a **weak relationship**."
             else:
                 message += f", however, only {r2_string} of the variance is explained, indicating a **negligible relationship**."
         else:
             if r2 >= 0.14:
-                message += f"explaining {r2_string} of the variance, indicating a **strong relationship**."
+                message += f" explaining {r2_string} of the variance, indicating a **strong relationship**."
             elif r2 >= 0.06:
-                message += f"explaining {r2_string} of the variance, indicating a **moderate relationship**."
+                message += f" explaining {r2_string} of the variance, indicating a **moderate relationship**."
             elif r2 >= 0.01:
-                message += f"explaining {r2_string} of the variance, indicating a **weak relationship**."
+                message += f" explaining {r2_string} of the variance, indicating a **weak relationship**."
             else:
-                message += f"explaining {r2_string} of the variance, indicating a **negligible relationship**."
+                message += f" explaining {r2_string} of the variance, indicating a **negligible relationship**."
 
         # # Combine the messages
         st.write(message)
@@ -673,7 +673,7 @@ plot_numerical(
     metric_column="steam_positive_review_ratio",
     independent_var_column="languages_with_full_audio_count",
     header="Languages Full Audio Supported",
-    body="Note that games with an extremely high number of languages supported have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible.",
+    body="Note that games with an extremely high number of audio languages have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible.",
     metric_label="Review Score",
     independent_var_label="Number of Languages with Full Audio",
 )
