@@ -78,6 +78,8 @@ def plot_categorical(
     Plots a bar chart of a categorical variable against a metric variable.
     """
 
+    df = df.copy()
+
     if metric_label is None:
         metric_label = metric_column
     if category_label is None:
@@ -114,25 +116,49 @@ def plot_categorical(
 
         # Print a description of the results
         # Determine significance level
-        if p_value < 0.05:
-            significance_msg = f'We note a **statistically significant** impact of "{category_label}" on "{metric_label}" (p-value: {p_value:.3f})'
-        elif p_value < 0.1:
-            significance_msg = f'We note a **potentially significant** impact of "{category_label}" on "{metric_label}" (p-value: {p_value:.3f})'
-        else:
-            significance_msg = f'We observe **no statistically significant** impact of "{category_label}" on "{metric_label}" (p-value: {p_value:.3f})'
+        precision = 6
+        format_string = f".{precision}f"
 
-        # Determine effect size interpretation
-        if eta_squared >= 0.14:
-            effect_msg = f"with a **strong effect** (η²: {eta_squared:.3f})."
-        elif eta_squared >= 0.06:
-            effect_msg = f"with a **moderate effect** (η²: {eta_squared:.3f})."
-        elif eta_squared >= 0.01:
-            effect_msg = f"with a **small effect** (η²: {eta_squared:.3f})."
+        p_value = round(p_value, precision)
+        if p_value > 0:
+            p_value_string = f"{p_value:{format_string}}"
         else:
-            effect_msg = f"but the effect is **negligible** (η²: {eta_squared:.3f})."
+            p_value_string = f"< {10**-precision:{format_string}}"  # If p-value rounds to zero, display like "< 0.000001" (using correct precision)
+
+        eta_squared = round(eta_squared, precision)
+        if eta_squared > 0:
+            eta_squared_string = f"{eta_squared:{format_string}}"
+        else:
+            eta_squared_string = f"< {10**-precision:{format_string}}"
+
+        if p_value < 0.05:
+            message = f'We note a **statistically significant** impact of "{category_label}" on "{metric_label}" (p-value: {p_value_string})'
+        elif p_value < 0.1:
+            message = f'We note a **potentially significant** impact of "{category_label}" on "{metric_label}" (p-value: {p_value_string})'
+        else:
+            message = f'We observe **no statistically significant** impact of "{category_label}" on "{metric_label}" (p-value: {p_value_string})'
+
+        if p_value < 0.1:
+            if eta_squared >= 0.14:
+                message += f"with a **strong effect size** (η²: {eta_squared_string})."
+            elif eta_squared >= 0.06:
+                message += f"with a **moderate effect size** (η²: {eta_squared_string})."
+            elif eta_squared >= 0.01:
+                message += f", however, the effect is **small** (η²: {eta_squared_string})."
+            else:
+                message += f", however, the effect is **negligible** (η²: {eta_squared_string})."
+        else:
+            if eta_squared >= 0.14:
+                message += f"with a **strong effect size** (η²: {eta_squared_string})."
+            elif eta_squared >= 0.06:
+                message += f"with a **moderate effect size** (η²: {eta_squared_string})."
+            elif eta_squared >= 0.01:
+                message += f"with a **small effect size** (η²: {eta_squared_string})."
+            else:
+                message += f"and the effect is **negligible** (η²: {eta_squared_string})."
 
         # Combine the messages
-        st.write(f"{significance_msg} {effect_msg}")
+        st.write(message)
 
         # group by category_column
         df = (
@@ -156,7 +182,7 @@ def plot_categorical(
         st.pyplot(fig)
 
 
-def plot_continuous(
+def plot_numerical(
     df: pd.DataFrame,
     metric_column: str,
     independent_var_column: str,
@@ -166,7 +192,7 @@ def plot_continuous(
     independent_var_label: str = None,
 ):
     """
-    Plots a line chart of a continuous variable against a metric variable.
+    Plots a line chart of a metric against a numerical independent variable.
     """
 
     if metric_label is None:
@@ -186,26 +212,49 @@ def plot_continuous(
 
         # Print a description of the results
         # Determine significance level
-        format_string = ".6f"
-        if p_value < 0.05:
-            significance_msg = f'We note a **statistically significant** impact of "{independent_var_label}" on "{metric_label}" (p-value: {p_value:{format_string}})'
-        elif p_value < 0.1:
-            significance_msg = f'We note a **potentially significant** impact of "{independent_var_label}" on "{metric_label}" (p-value: {p_value:{format_string}})'
-        else:
-            significance_msg = f'We observe **no statistically significant** impact of "{independent_var_label}" on "{metric_label}" (p-value: {p_value:{format_string}})'
+        precision = 6
+        format_string = f".{precision}f"
 
-        # Determine effect size interpretation
-        if r2 >= 0.14:
-            effect_msg = f"with a **strong effect** (R^2={r2:{format_string}})."
-        elif r2 >= 0.06:
-            effect_msg = f"with a **moderate effect** (R^2={r2:{format_string}})."
-        elif r2 >= 0.01:
-            effect_msg = f"with a **small effect** (R^2={r2:{format_string}})."
+        p_value = round(p_value, precision)
+        if p_value > 0:
+            p_value_string = f"{p_value:{format_string}}"
         else:
-            effect_msg = f"but the effect is **negligible** (R^2={r2:{format_string}})."
+            p_value_string = f"< {10**-precision:{format_string}}"  # If p-value rounds to zero, display like "< 0.000001" (using correct precision)
+
+        r2 = round(r2, precision)
+        if r2 > 0:
+            r2_string = f"{r2:{format_string}}"
+        else:
+            r2_string = f"< {10**-precision:{format_string}}"
+
+        if p_value < 0.05:
+            message = f'We note a **statistically significant** impact of "{independent_var_label}" on "{metric_label}" (p-value: {p_value_string})'
+        elif p_value < 0.1:
+            message = f'We note a **potentially significant** impact of "{independent_var_label}" on "{metric_label}" (p-value: {p_value_string})'
+        else:
+            message = f'We observe **no statistically significant** impact of "{independent_var_label}" on "{metric_label}" (p-value: {p_value_string})'
+
+        if p_value < 0.1:
+            if r2 >= 0.5:
+                message += f"explaining {r2_string} of the variance, indicating a **strong relationship**."
+            elif r2 >= 0.25:
+                message += f"explaining {r2_string} of the variance, indicating a **moderate relationship**."
+            elif r2 >= 0.05:
+                message += f", however, only {r2_string} of the variance is explained, indicating a **weak relationship**."
+            else:
+                message += f", however, only {r2_string} of the variance is explained, indicating a **negligible relationship**."
+        else:
+            if r2 >= 0.14:
+                message += f"explaining {r2_string} of the variance, indicating a **strong relationship**."
+            elif r2 >= 0.06:
+                message += f"explaining {r2_string} of the variance, indicating a **moderate relationship**."
+            elif r2 >= 0.01:
+                message += f"explaining {r2_string} of the variance, indicating a **weak relationship**."
+            else:
+                message += f"explaining {r2_string} of the variance, indicating a **negligible relationship**."
 
         # # Combine the messages
-        st.write(f"{significance_msg} {effect_msg}")
+        st.write(message)
 
         # Plot as a scatter + trend line
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -372,9 +421,9 @@ def do_controller_support():
     df_controller_support["controller_support"] = df_controller_support["controller_support"].fillna("unknown")
 
     # normalize review scores against yearly trends
-    df_controller_support["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_controller_support, "steam_positive_review_ratio", "release_year", method="diff")
+    df_controller_support["steam_positive_review_ratio_norm"] = utils.normalize_metric_across_groups(df_controller_support, "steam_positive_review_ratio", "release_year", method="diff")
 
-    f_stat, p_value, eta_squared = utils.anova_categorical(df_controller_support, "steam_positive_review_ratio", "controller_support")
+    f_stat, p_value, eta_squared = utils.anova_categorical(df_controller_support, "steam_positive_review_ratio_norm", "controller_support")
 
     st.write(f"We observe no measurable impact of controller support on the review score of games when controlling for release year (p-value: {p_value:.2f}).")
 
@@ -383,7 +432,7 @@ def do_controller_support():
         df_controller_support.groupby("controller_support")
         .agg(
             {
-                "steam_positive_review_ratio": "mean",
+                "steam_positive_review_ratio_norm": "mean",
                 "steam_total_reviews": "count",
                 "release_year": "mean",
             }
@@ -393,7 +442,7 @@ def do_controller_support():
 
     # Plot as a bar chart
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(df_controller_support["controller_support"], df_controller_support["steam_positive_review_ratio"], alpha=0.7)
+    ax.bar(df_controller_support["controller_support"], df_controller_support["steam_positive_review_ratio_norm"], alpha=0.7)
     ax.set_xlabel("Controller Support")
     ax.set_ylabel("Mean Review Score")
     ax.set_title("Mean Review Score by Controller Support")
@@ -422,9 +471,9 @@ def do_early_access():
     df_early_access["early_access"] = df_early_access["early_access"].apply(lambda x: "yes" if x is True else ("no" if x is False else "unknown"))
 
     # normalize review scores against yearly trends
-    df_early_access["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_early_access, "steam_positive_review_ratio", "release_year", method="diff")
+    df_early_access["steam_positive_review_ratio_norm"] = utils.normalize_metric_across_groups(df_early_access, "steam_positive_review_ratio", "release_year", method="diff")
 
-    f_stat, p_value, eta_squared = utils.anova_categorical(df_early_access, "steam_positive_review_ratio", "early_access")
+    f_stat, p_value, eta_squared = utils.anova_categorical(df_early_access, "steam_positive_review_ratio_norm", "early_access")
     st.write(f"We observe no significant impact of early access status on review scores when controlling for year of release, and no meaningful coorelation (p-value: {p_value:.2f}).")
 
     # group by controller support values
@@ -432,7 +481,7 @@ def do_early_access():
         df_early_access.groupby("early_access")
         .agg(
             {
-                "steam_positive_review_ratio": "mean",
+                "steam_positive_review_ratio_norm": "mean",
                 "steam_total_reviews": "count",
                 "release_year": "mean",
             }
@@ -442,7 +491,7 @@ def do_early_access():
 
     # Plot as a bar chart
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(df_early_access["early_access"], df_early_access["steam_positive_review_ratio"], alpha=0.7)
+    ax.bar(df_early_access["early_access"], df_early_access["steam_positive_review_ratio_norm"], alpha=0.7)
     ax.set_xlabel("Early Access")
     ax.set_ylabel("Mean Review Score")
     ax.set_title("Mean Review Score by Early Access")
@@ -471,9 +520,9 @@ def do_early_access():
     df_difficulty["gamefaqs_difficulty_rating"].fillna("unknown", inplace=True)
 
     # normalize review scores against yearly trends
-    df_difficulty["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_difficulty, "steam_positive_review_ratio", "release_year", method="diff")
+    df_difficulty["steam_positive_review_ratio_norm"] = utils.normalize_metric_across_groups(df_difficulty, "steam_positive_review_ratio", "release_year", method="diff")
 
-    f_stat, p_value, eta_squared = utils.anova_categorical(df_difficulty, "steam_positive_review_ratio", "gamefaqs_difficulty_rating")
+    f_stat, p_value, eta_squared = utils.anova_categorical(df_difficulty, "steam_positive_review_ratio_norm", "gamefaqs_difficulty_rating")
     st.write(f"(p-value: {p_value:.2f}).")
 
     # group by controller support values
@@ -481,7 +530,7 @@ def do_early_access():
         df_difficulty.groupby("gamefaqs_difficulty_rating")
         .agg(
             {
-                "steam_positive_review_ratio": "mean",
+                "steam_positive_review_ratio_norm": "mean",
                 "steam_total_reviews": "count",
                 "release_year": "mean",
             }
@@ -509,7 +558,7 @@ def do_early_access():
 
     # Plot as a bar chart
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.barh(df_difficulty["gamefaqs_difficulty_rating"], df_difficulty["steam_positive_review_ratio"], alpha=0.7)
+    ax.barh(df_difficulty["gamefaqs_difficulty_rating"], df_difficulty["steam_positive_review_ratio_norm"], alpha=0.7)
     ax.set_ylabel("Game Difficulty Rating")
     ax.set_xlabel("Mean Review Score")
     ax.set_title("Mean Review Score by Game Difficulty Rating")
@@ -555,10 +604,8 @@ plot_categorical(
 
 temp_df = df_filtered.copy()
 
-temp_df["languages_supported_count"] = temp_df["languages_supported"].apply(lambda x: len(x))
-
-# Drop all nans
 temp_df = temp_df.dropna(subset=["languages_supported"])
+temp_df["languages_supported_count"] = temp_df["languages_supported"].apply(lambda x: len(x))
 
 # Drop games with < 10 reviews
 temp_df = temp_df[temp_df["steam_total_reviews"] >= 10]
@@ -570,7 +617,7 @@ temp_df = temp_df[temp_df["steam_positive_review_ratio"] > 0]
 temp_df = temp_df[temp_df["languages_supported_count"] < 20]
 
 # Rerun the analysis
-plot_continuous(
+plot_numerical(
     df=temp_df,
     metric_column="steam_positive_review_ratio",
     independent_var_column="languages_supported_count",
@@ -578,4 +625,55 @@ plot_continuous(
     body="Note that games with an extremely high number of languages supported have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible.",
     metric_label="Review Score",
     independent_var_label="Number of Languages Supported",
+)
+
+
+##############################
+# languages_with_full_audio _count_
+##############################
+# # Introduce temporary column of the number of languages supported
+# df_filtered["languages_supported_count"] = df_filtered["languages_supported"].apply(lambda x: len(x))
+
+# plot_continuous(
+#     df=df_filtered,
+#     metric_column="steam_positive_review_ratio",
+#     independent_var_column="languages_supported_count",
+#     header="Languages Supported",
+#     # body="This suggests that offering a demo has no significant impact on the review score of a game.",
+#     metric_label="Review Score",
+#     independent_var_label="Number of Languages Supported",
+# )
+
+
+# Sanity check, prind a bunch fo random game names and their review score
+st.write(df_filtered.sample(10)[["name", "steam_positive_review_ratio"]])
+st.write(df_all_in_year_range.sample(10)[["name", "steam_positive_review_ratio"]])
+
+
+temp_df = df_filtered.copy()
+
+temp_df = temp_df.dropna(subset=["languages_with_full_audio"])
+temp_df["languages_with_full_audio_count"] = temp_df["languages_with_full_audio"].apply(lambda x: len(x))
+
+# Drop games with < 10 reviews
+temp_df = temp_df[temp_df["steam_total_reviews"] >= 10]
+
+# Drop games with zero review score
+temp_df = temp_df[temp_df["steam_positive_review_ratio"] > 0]
+
+# Drop games with more than N languages
+temp_df = temp_df[temp_df["languages_with_full_audio_count"] < 20]
+
+# Sanity check, prind a bunch fo random game names, their number of languages and the review score
+st.write(temp_df.sample(10)[["name", "languages_with_full_audio_count", "steam_positive_review_ratio"]])
+
+# Rerun the analysis
+plot_numerical(
+    df=temp_df,
+    metric_column="steam_positive_review_ratio",
+    independent_var_column="languages_with_full_audio_count",
+    header="Languages Full Audio Supported",
+    body="Note that games with an extremely high number of languages supported have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible.",
+    metric_label="Review Score",
+    independent_var_label="Number of Languages with Full Audio",
 )
