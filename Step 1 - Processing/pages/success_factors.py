@@ -27,45 +27,99 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
 df = utils.load_main_dataset()
+
+############################################
+# Set page defaults
+############################################
+
 
 variance_explained_per_variable = {}
 
-minimum_review_score = 0.01  # Minimum review score to consider a game as "not fake"
+default_review_score_range = (0.1, 1.0)
+default_tag_display_value = "All"
+default_min_year = 2010
+default_max_year = 2024
+default_target_metric_display_name = "Review Scores"
+default_min_review_count = 10
 
+# If not already set, set the session state variables to the default values
+if "selected_tag_display" not in st.session_state:
+    st.session_state["selected_tag_display"] = default_tag_display_value
+    st.session_state["selected_year_range"] = (default_min_year, default_max_year)
+    st.session_state["target_metric_display_name"] = default_target_metric_display_name
+    st.session_state["min_review_count"] = default_min_review_count
+    st.session_state["review_score_range"] = default_review_score_range
 
 ############################################
 # Sidebar
 ############################################
 # Sidebar Filter: Release Year Range
 st.sidebar.title("Filters")
+
 # Tag options with counts (sorted alphabetically)
 tag_counts = df["tags"].explode().value_counts()  # Count occurrences of each tag (for display only)
 tag_options = "All", *sorted([f"{tag} ({tag_counts[tag]})" for tag in tag_counts.index])
 tag_mapping = {f"{tag} ({tag_counts[tag]})": tag for tag in tag_counts.index}  # Map display tag (with count) to actual value (used in df)
-selected_tag_display = st.sidebar.selectbox("All", tag_options)  # Create dropdown with display values
+selected_tag_display = st.sidebar.selectbox("All", tag_options, key="selected_tag_display")  # Create dropdown with display values
 selected_tag = tag_mapping.get(selected_tag_display, "All")  # Map back from selected_display_tag to actual tag
 
-# Sidebar Filter: Release Year Range
+# Map the slider range from the data's min and max years
 min_year = int(df["release_year"].min())
 max_year = int(df["release_year"].max())
-default_min_year = 2010
-default_max_year = 2024
-selected_year_range = st.sidebar.slider("Select Release Year Range", min_year, max_year, (default_min_year, default_max_year))
+
+selected_year_range = st.sidebar.slider("Select Release Year Range", min_year, max_year, key="selected_year_range")
+
+target_metric_display_name = st.sidebar.radio("Select a target metric:", ["Review Scores", "Estimated Owners"], key="target_metric_display_name")
+
+if st.sidebar.button("Reset Filters"):
+    print("Hello!")
+    # Clear the session state variables which will make them reset to their default values on rerun
+    st.session_state.clear()
+    st.rerun()
+
 
 st.sidebar.markdown("---")
-
-target_metric_display_name = st.sidebar.radio("Select a target metric:", ["Review Scores", "Estimated Owners"])
-
-st.sidebar.markdown("---")
-min_review_count = st.sidebar.number_input("Minimum number of reviews per game", value=10, min_value=1)
+st.sidebar.title("Data Cleaning")
+min_review_count = st.sidebar.number_input("Minimum number of reviews per game", value=10, min_value=1, key="min_review_count")
 st.sidebar.caption("Games with very few reviews have a high chance of being fake or having skewed review scores. Suggested value: 10.")
 
+review_score_range = st.sidebar.slider("Review Scores Range", value=(0.1, 1.0), step=0.01, min_value=0.0, max_value=1.0, key="review_score_range")
+st.sidebar.caption("Games with very low scores are likely to be fake or shovelware. Suggested value: 0.1 to 1.0, or 0.1 to 0.99 to exclude perfect scores.")
 
 ############################################
 # Helper Functions
 ############################################
+
+
+def is_default_review_score_analysis():
+    if target_metric_display_name != "Review Scores":
+        return False
+    if selected_year_range[0] != default_min_year or selected_year_range[1] != default_max_year:
+        return False
+    if selected_tag != "All":
+        return False
+    if min_review_count != default_min_review_count:
+        return False
+    if review_score_range != default_review_score_range:
+        return False
+    return True
+
+
+def is_default_estimated_owners_analysis():
+    if target_metric_display_name != "Estimated Owners":
+        return False
+    if selected_year_range[0] != default_min_year or selected_year_range[1] != default_max_year:
+        return False
+    if selected_tag != "All":
+        return False
+    if min_review_count != default_min_review_count:
+        return False
+    if review_score_range != default_review_score_range:
+        return False
+    return True
+
+
 def plot_categorical(
     df: pd.DataFrame,
     metric_column: str,
@@ -95,9 +149,10 @@ def plot_categorical(
         # introduce a temporary column of the unique values of the category column, and "unknown" for NaN
         temp_category_column = f"{category_column}_temp"
         df[temp_category_column] = df[category_column].astype(str).fillna("unknown")
+
         # normalize review scores against yearly trends (e.g. ratings tend to go up over time)
-        if control_for_yearly_trends:
-            df[metric_column] = utils.normalize_metric_across_groups(df, metric_column, "release_year", method="diff")
+        # if control_for_yearly_trends:
+        #     df[metric_column] = utils.normalize_metric_across_groups(df, metric_column, "release_year", method="diff")
 
         # Test for significance
         f_stat, p_value, eta_squared = utils.anova_categorical(df, metric_column, temp_category_column)
@@ -157,35 +212,20 @@ def plot_categorical(
         if body_after:
             st.write(body_after)
 
-        # group by category_column
-        df = (
-            df.groupby(temp_category_column)
-            .agg(
-                {
-                    metric_column: "mean",
-                    "release_year": "mean",
-                }
-            )
-            .reset_index()
-        )
-
-        # Plot as a bar chart
+        # Use raw data for proper box plot distributions
         if horizontal:
             fig, ax = plt.subplots(figsize=(10, 6))
-            ax.barh(df[temp_category_column], df[metric_column], alpha=0.7)
+            sns.boxplot(x=metric_column, y=temp_category_column, data=df, ax=ax)
+            ax.set_xlabel(f"Relative Distance from Mean {metric_label}")
             ax.set_ylabel(category_label)
-            ax.set_xlabel(metric_label)
-            ax.set_title(f"Mean {metric_label} by {category_label}")
-            ax.legend()
+            ax.set_title(f"Relative Distance from Mean {metric_label} by {category_label}")
             st.pyplot(fig)
         else:
             fig, ax = plt.subplots(figsize=(10, 6))
-            ax.bar(df[temp_category_column], df[metric_column], alpha=0.7)
-            ax.axhline(0, color="black", linewidth=0.5, alpha=0.4)  # Add a zero line
+            sns.boxplot(x=temp_category_column, y=metric_column, data=df, ax=ax)
             ax.set_xlabel(category_label)
-            ax.set_ylabel(metric_label)
-            ax.set_title(f"Mean {metric_label} by {category_label}")
-            ax.legend()
+            ax.set_ylabel(f"Relative Distance from Mean {metric_label}")
+            ax.set_title(f"Relative Distance from Mean {metric_label} by {category_label}")
             st.pyplot(fig)
 
 
@@ -212,7 +252,7 @@ def plot_numerical(
     st.header(header)
 
     with st.spinner("Running...", show_time=True):
-        if body_before:
+        if body_before and body_before != "":
             st.write(body_before)
 
         x = df[independent_var_column]
@@ -280,7 +320,7 @@ def plot_numerical(
         # Store the result
         variance_explained_per_variable[independent_var_column] = r2
 
-        if body_after:
+        if body_after and body_after != "":
             st.write(body_after)
 
         # Plot as a scatter + trend line
@@ -289,14 +329,14 @@ def plot_numerical(
         ax.plot(x, trend_line(x), label=f"Trend Line (R^2={r2:.3f})", color="red")
         ax.set_xlabel(independent_var_label)
         ax.set_ylabel(metric_label)
-        ax.set_title(f"Mean {metric_label} by {independent_var_label}")
+        ax.set_title(f"{metric_label} by {independent_var_label}")
         ax.legend()
         st.pyplot(fig)
 
 
-############################################
+###################################################################################################
 # Preparation and setup
-############################################
+###################################################################################################
 # Page Title & Description
 st.title(f"Factors of Success Analysis")
 
@@ -315,8 +355,9 @@ else:
 # Filter out games with < N reviews
 df_filtered = df_filtered[df_filtered["steam_total_reviews"] >= min_review_count]
 
-# Filter out games with too low review scores
-df_filtered = df_filtered[df_filtered["steam_positive_review_ratio"] >= minimum_review_score]
+# Filter out games with too low/high review scores
+df_filtered = df_filtered[df_filtered["steam_positive_review_ratio"] >= review_score_range[0]]
+df_filtered = df_filtered[df_filtered["steam_positive_review_ratio"] <= review_score_range[1]]
 
 target_metric = "steam_positive_review_ratio" if target_metric_display_name == "Review Scores" else "estimated_owners_boxleiter"
 
@@ -350,6 +391,10 @@ elif df_filtered.shape[0] < 250:
     st.info(f"**Note**: There are fewer than 250 titles matching the selected tag and year range. Results may be noisy or unreliable.")
 
 
+###################################################################################################
+# Analysis
+###################################################################################################
+
 ##############################
 # Achievements
 ##############################
@@ -358,14 +403,22 @@ df_temp = df_filtered.copy()
 # Drop zero and >100 achievements
 df_temp = df_temp[(df_temp["achievements_count"] > 0) & (df_temp["achievements_count"] < 100)]
 
+if is_default_review_score_analysis():
+    comment = "So while we do see an upward trend up to a point, it is largely drowned out by the individual variance by title."
+elif is_default_estimated_owners_analysis():
+    comment = "So while noise and individual variance is very high, we do see positive relationship between the number of achievements and the number of estimated owners."
+else:
+    comment = ""
+
 plot_numerical(
     df=df_temp,
     metric_column=target_metric,
     independent_var_column="achievements_count",
     header="Achievements",
-    body_after="So while we do see an upward trend, it is largely drowned out by the individual variance by title.",
-    metric_label="Review Score",
+    body_after=comment,
+    metric_label=target_metric_display_name,
     independent_var_label="Number of Achievements",
+    trend_line_degree=2,
 )
 
 
@@ -377,12 +430,21 @@ plot_numerical(
 q_low, q_high = df_filtered["average_time_to_beat"].quantile([0.01, 0.99])
 df_temp = df_filtered[(df_filtered["average_time_to_beat"] >= q_low) & (df_filtered["average_time_to_beat"] <= q_high)]
 
+if is_default_review_score_analysis():
+    comment = "So while there is a pattern of seeing fewer games with low review scores as the average time to beat increases, the statistical correlation is virtually non-existent."
+elif is_default_estimated_owners_analysis():
+    comment = ""
+else:
+    comment = ""
+
+
 plot_numerical(
     df=df_temp,
     metric_column="steam_positive_review_ratio",
     independent_var_column="average_time_to_beat",
     header="Game Duration (time to beat)",
-    metric_label="Review Score",
+    metric_label=target_metric_display_name,
+    body_after=comment,
     independent_var_label="Average Time to Beat (hours)",
 )
 
@@ -411,7 +473,7 @@ plot_categorical(
     metric_column="steam_positive_review_ratio",
     category_column="controller_support",
     header="Controller Support",
-    metric_label="Review Score",
+    metric_label=target_metric_display_name,
     category_label="Controller Support",
 )
 
@@ -431,7 +493,7 @@ plot_categorical(
     metric_column="steam_positive_review_ratio",
     category_column="early_access",
     header="Early Access",
-    metric_label="Review Score",
+    metric_label=target_metric_display_name,
     category_label="Early Access",
 )
 
@@ -460,13 +522,21 @@ rename_dict = {
 }
 df_temp["gamefaqs_difficulty_rating"] = df_temp["gamefaqs_difficulty_rating"].map(rename_dict)
 
+if is_default_review_score_analysis():
+    comment = 'Although negligible, we do see an unsurprising preference towards games considered "easy" to "just right", and a dislike of games considered too simple or too difficult. However, effect size is very small, and noise remains high.'
+elif is_default_estimated_owners_analysis():
+    comment = ""
+else:
+    comment = ""
+
+
 plot_categorical(
     df=df_temp,
     metric_column="steam_positive_review_ratio",
     category_column="gamefaqs_difficulty_rating",
     header="Game Difficulty",
-    body_after='Though negligible, we do see an unsurprising preference towards games considered "easy" to "just right", and a dislike of games considered too simple or too difficult.',
-    metric_label="Review Score",
+    body_after=comment,
+    metric_label=target_metric_display_name,
     category_label="Game Difficulty Rating",
     horizontal=True,
 )
@@ -481,7 +551,7 @@ plot_categorical(
     metric_column="steam_positive_review_ratio",
     category_column="has_demos",
     header="Game Demos",
-    metric_label="Review Score",
+    metric_label=target_metric_display_name,
     category_label="Has a Demo",
 )
 
@@ -503,14 +573,23 @@ temp_df = temp_df[temp_df["steam_positive_review_ratio"] > 0]
 # Drop games with more than N languages
 temp_df = temp_df[temp_df["languages_supported_count"] < 20]
 
+if is_default_review_score_analysis():
+    comment = "While there is a visible pattern of higher review scores for games with more languages supported, the statistical correlation is virtually non-existent."
+elif is_default_estimated_owners_analysis():
+    comment = ""
+else:
+    comment = ""
+
+
 # Rerun the analysis
 plot_numerical(
     df=temp_df,
     metric_column="steam_positive_review_ratio",
     independent_var_column="languages_supported_count",
     header="Languages Supported",
-    body_before="Note that games with an extremely high number of languages supported have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible.",
-    metric_label="Review Score",
+    body_before="Note that games with an extremely high number of languages supported have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible at any range.",
+    body_after=comment,
+    metric_label=target_metric_display_name,
     independent_var_label="Number of Languages Supported",
 )
 
@@ -523,6 +602,9 @@ temp_df = df_filtered.copy()
 temp_df = temp_df.dropna(subset=["languages_with_full_audio"])
 temp_df["languages_with_full_audio_count"] = temp_df["languages_with_full_audio"].apply(lambda x: len(x))
 
+# Drop those with 0 languages, essentially NaNs
+temp_df = temp_df[temp_df["languages_with_full_audio_count"] > 0]
+
 # Drop games with more than N languages, which are likely fake
 temp_df = temp_df[temp_df["languages_with_full_audio_count"] < 20]
 
@@ -533,8 +615,9 @@ plot_numerical(
     independent_var_column="languages_with_full_audio_count",
     header="Languages Full Audio Supported",
     body_before="Note that games with an extremely high number of audio languages have been excluded from this analysis due to the assumption that they are fake games or lying about their language support, but the effect was still negligible.",
-    metric_label="Review Score",
+    metric_label=target_metric_display_name,
     independent_var_label="Number of Languages with Full Audio",
+    trend_line_degree=2,
 )
 
 
@@ -563,7 +646,7 @@ plot_numerical(
     metric_column="steam_positive_review_ratio",
     independent_var_column="price_original",
     header="Launch Price",
-    metric_label="Review Score",
+    metric_label=target_metric_display_name,
     independent_var_label="Original Price",
 )
 
@@ -595,15 +678,20 @@ def do_runs_on_platform():
         st.write(
             f"""
             The findings are as follows:
-
-            Though all platform support had a small to moderate effect size, only the Linux and Mac support had a statistically significant association with review scores.
-
             - **Windows**: p-value: {win_p_value:{format_string}}, r-squared: {win_r_squared:{format_string}}, Cohen's d: {win_cohen_d:{format_string}}
             - **Mac**: p-value: {mac_p_value:{format_string}}, r-squared: {mac_r_squared:{format_string}}, Cohen's d: {mac_cohen_d:{format_string}}
             - **Linux**: p-value: {linux_p_value:{format_string}}, r-squared: {linux_r_squared:{format_string}}, Cohen's d: {linux_cohen_d:{format_string}}
             - **Steam Deck**: p-value: {deck_p_value:{format_string}}, r-squared: {deck_r_squared:{format_string}}, Cohen's d: {deck_cohen_d:{format_string}}
             """
         )
+
+        if is_default_review_score_analysis():
+            st.write("Though all platform support had a small to moderate effect size, only the Linux and Mac support had a statistically significant association with review scores.")
+            st.write(
+                """Lack os Steam deck support specifically shows a decently large effect size, but it is worth keeping in mind that poorly supported,
+                      unoptimized and broken games would fail to be automatically supported by the Steam Deck. We suggest there is a high
+                      likelihood of selection bias being at play here."""
+            )
 
         # Store the result
         variance_explained_per_variable["runs_on_windows"] = win_r_squared
@@ -651,8 +739,7 @@ plot_numerical(
     metric_column="steam_positive_review_ratio",
     independent_var_column="steam_store_movie_count",
     header="Number of Trailers",
-    body_before="This suggests that the number of trailers a game has has no significant impact on the review score.",
-    metric_label="Review Score",
+    metric_label=target_metric_display_name,
     independent_var_label="Number of Trailers",
 )
 
@@ -673,7 +760,7 @@ plot_numerical(
     independent_var_column="steam_store_screenshot_count",
     header="Number of Screenshots",
     body_before="This suggests that the number of screenshots a game has has no significant impact on the review score.",
-    metric_label="Review Score",
+    metric_label=target_metric_display_name,
     independent_var_label="Number of Screenshots",
     trend_line_degree=2,
 )
@@ -686,14 +773,25 @@ plot_numerical(
 # Introduce temporary column of the number of tags
 df_filtered["tags_count"] = df_filtered["tags"].apply(lambda x: len(x))
 
+if is_default_review_score_analysis():
+    comment = """This surprisingly suggests that the number of tags a game has would be weakly associated with higher review scores,
+     though it is worth remembering that tags are partly community-driven, and so this could be a reflection of the community's engagement towards the game.
+      It is also possible that having more — and more accurate — tags has a positive impact on the review score through being able to target the right audience."""
+elif is_default_estimated_owners_analysis():
+    comment = ""
+else:
+    comment = ""
+
+
 plot_numerical(
     df=df_filtered,
     metric_column="steam_positive_review_ratio",
     independent_var_column="tags_count",
     header="Number of Tags",
-    body_after="This suggests that the number of tags a game has is weakly associated with higher review scores.",
-    metric_label="Review Score",
+    body_after=comment,
+    metric_label=target_metric_display_name,
     independent_var_label="Number of Tags",
+    # trend_line_degree=2,
 )
 
 
@@ -707,7 +805,7 @@ plot_categorical(
     category_column="vr_supported",
     header="VR Support",
     # body_before="This suggests that VR support has no significant impact on the review score of a game.",
-    metric_label="Review Score",
+    metric_label=target_metric_display_name,
     category_label="VR Supported",
 )
 
@@ -720,8 +818,14 @@ if target_metric_display_name == "Review Scores" and selected_year_range[0] == d
     ## Default "full" analysis for review scores
     st.header("Summary of Findings")
 
-    st.write("Disappointingly, meta-features such as the number of screenshots, achievements or tags all have but very limited impacts on the review score of a game.")
-    st.write("We suggest that, if anything, the only significant factors are the additions of Mac and Linux platform support, and having sufficient tags.")
+    st.info(
+        "Remember that the results are based on retrospective data and do not imply causation. They are merely statistical observations, as directionality of relationship cannot be established through these methods."
+    )
+
+    if is_default_review_score_analysis():
+        st.write("Disappointingly, meta-features such as the number of screenshots, achievements or tags all have but very limited impacts on the review score of a game.")
+        st.write("We observe that, if anything, the only significant correlations are the additions of Mac and Linux platform support, and having sufficient tags.")
+
     results_message = "Here are the proportion of variance explained by each feature, in descending order:"
 
     # Sort the variance explained by each variable
