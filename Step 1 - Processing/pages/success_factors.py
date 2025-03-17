@@ -783,55 +783,63 @@ plot_categorical(
 # Recap
 ##############################
 
-if target_metric_display_name == "Review Scores" and selected_year_range[0] == default_min_year and selected_year_range[1] == default_max_year and selected_tag == "All":
-    ## Default "full" analysis for review scores
-    st.header("Summary of Findings")
+st.header("Summary of Findings")
+st.info(
+    "Remember that the results are based on retrospective data and do not imply causation. They are merely statistical observations, as directionality of relationship cannot be established through these methods."
+)
 
-    st.info(
-        "Remember that the results are based on retrospective data and do not imply causation. They are merely statistical observations, as directionality of relationship cannot be established through these methods."
-    )
+if is_default_review_score_analysis():  ## Default "full" analysis for review scores
+    st.write("Disappointingly, meta-features such as the number of screenshots, achievements or tags all have but very limited impacts on the review score of a game.")
+    st.write("We observe that, if anything, the only significant correlations are the additions of Mac and Linux platform support, and having sufficient tags.")
 
-    if is_default_review_score_analysis():
-        st.write("Disappointingly, meta-features such as the number of screenshots, achievements or tags all have but very limited impacts on the review score of a game.")
-        st.write("We observe that, if anything, the only significant correlations are the additions of Mac and Linux platform support, and having sufficient tags.")
 
-    results_message = "Here are the proportion of variance explained by each feature, in descending order:"
-
-    # Sort the variance explained by each variable
-    variance_explained_per_variable = {k: v for k, v in sorted(variance_explained_per_variable.items(), key=lambda item: item[1], reverse=True)}
-
-    # Print the variance explained by each variable
-    for variable, variance in variance_explained_per_variable.items():
-        precision = 3
-        rounded_variance = round(variance, precision)
-
-        # If rounded variance is zero, display as "< 0.001"
-        if rounded_variance > 0:
-            variance_string = f"{rounded_variance:.3f}"
-        else:
-            variance_string = f"< {10**-precision:.3f}"
-        # if variance
-        results_message += f"\n- **{variable}**: {variance_string}"
-
-    st.write(results_message)
 elif target_metric_display_name == "Estimated Owners" and selected_year_range[0] == default_min_year and selected_year_range[1] == default_max_year and selected_tag == "All":
     ## Default "full" analysis for estimated owners
-    st.header("Summary of Findings")
-    st.write("TODO")
 
-    # st.write("Disappointingly, meta-features such as the number of screenshots, achievements or tags all have but very limited impacts on the number of estimated owners of a game.")
-    # st.write("We suggest that, if anything, the only significant factors are the platform support and having sufficient tags.")
-    # results_message = "Here are the proportion of variance explained by each feature, in descending order:"
+    st.write("Similarly to Review Scores, meta-features such as the number of screenshots, achievements or tags all have but very limited impacts on the estimated number of owners of a game.")
+    st.write("Once again, support for Mac and Linux platforms, having sufficient tags, but also offering  more achievements are the only moderately significant correlations.")
 
-    # # Sort the variance explained by each variable
-    # variance_explained_per_variable = {k: v for k, v in sorted(variance_explained_per_variable.items(), key=lambda item: item[1], reverse=True)}
-
-    # # Print the variance explained by each variable
-    # for variable, variance in variance_exvariableplained_per_variable.items():
-    #     results_message += f"\n- **{variable}**: {variance:.3f}"
-
-    # st.write(results_message)
 else:
-    st.header("Summary of Findings")
     # Dynamic summary
-    st.write("TODO")
+    # Grab any results from the variance explained where value >= 0.05
+    high_correlation_variables = {k: v for k, v in sorted(variance_explained_per_variable.items(), key=lambda item: item[1], reverse=True) if v >= 0.05}
+    if high_correlation_variables:
+        message = f"We note that the following variables correlate with {target_metric_display_name} to a significant degree:"
+        for variable, variance in high_correlation_variables.items():
+            message += f"\n- **{variable}**: {variance:.3f}"
+        st.write(message)
+
+    # Grab any results from the variance explained where value < 0.05 and >= 0.01
+    moderate_correlation_variables = {k: v for k, v in sorted(variance_explained_per_variable.items(), key=lambda item: item[1], reverse=True) if 0.01 <= v < 0.05}
+    if moderate_correlation_variables:
+        if high_correlation_variables:
+            message = f"We also note that the following variables correlate with {target_metric_display_name} to a small but noticeable degree:"
+        else:
+            message = f"We note that the following variables correlate with {target_metric_display_name} to a small but noticeable degree:"
+        for variable, variance in moderate_correlation_variables.items():
+            message += f"\n- **{variable}**: {variance:.3f}"
+        st.write(message)
+
+    if not high_correlation_variables and not moderate_correlation_variables:
+        st.write(f"No significant correlations with {target_metric_display_name} were found for the selected data and filters.")
+
+
+results_message = f"Here are the proportion of variance of {target_metric_display_name} explained by each feature, in descending order:"
+
+# Sort the variance explained by each variable
+variance_explained_per_variable = {k: v for k, v in sorted(variance_explained_per_variable.items(), key=lambda item: item[1], reverse=True)}
+
+# Print the variance explained by each variable
+for variable, variance in variance_explained_per_variable.items():
+    precision = 3
+    rounded_variance = round(variance, precision)
+
+    # If rounded variance is zero, display as "< 0.001"
+    if rounded_variance > 0:
+        variance_string = f"{rounded_variance:.3f}"
+    else:
+        variance_string = f"< {10**-precision:.3f}"
+    # if variance
+    results_message += f"\n- **{variable}**: {variance_string}"
+
+st.write(results_message)
