@@ -802,7 +802,16 @@ if target_metric_display_name == "Review Scores" and selected_year_range[0] == d
 
     # Print the variance explained by each variable
     for variable, variance in variance_explained_per_variable.items():
-        results_message += f"\n- **{variable}**: {variance:.3f}"
+        precision = 3
+        rounded_variance = round(variance, precision)
+
+        # If rounded variance is zero, display as "< 0.001"
+        if rounded_variance > 0:
+            variance_string = f"{rounded_variance:.3f}"
+        else:
+            variance_string = f"< {10**-precision:.3f}"
+        # if variance
+        results_message += f"\n- **{variable}**: {variance_string}"
 
     st.write(results_message)
 elif target_metric_display_name == "Estimated Owners" and selected_year_range[0] == default_min_year and selected_year_range[1] == default_max_year and selected_tag == "All":
