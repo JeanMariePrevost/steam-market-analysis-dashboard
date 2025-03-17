@@ -456,7 +456,7 @@ def ttest_two_groups(df, numeric_col, cat_col):
     # Confirm exactly 2 groups
     group_labels = valid_data[cat_col].unique()
     if len(group_labels) != 2:
-        raise ValueError(f"Column '{cat_col}' must have exactly 2 unique groups. Found: {group_labels}")
+        raise ValueError(f"Column '{cat_col}' must have exactly 2 unique groups. Found: {len(group_labels)}")
 
     # Split the data into two groups
     group1 = valid_data[valid_data[cat_col] == group_labels[0]][numeric_col]
