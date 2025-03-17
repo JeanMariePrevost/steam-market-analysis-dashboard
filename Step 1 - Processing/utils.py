@@ -393,38 +393,41 @@ def polynomial_regression_analysis(x, y, degree=1):
     return trend_line, r2, p_values, global_p_value, cohen_f2
 
 
-def normalize_metric_across_groups(df, metric_col, group_col="release_year", method="zscore") -> pd.Series:
+def adjust_metric_for_group_trends(df, metric_col, group_col) -> pd.Series:
     """
-    Normalizes a metric column based on grouping.
-    E.g. get the infliation-adjusted price for each year as opposed to the raw price.
+    Standardizes a metric for group-specific trends by removing the group-level mean and variance,
+    and then re-projecting the values onto the overall distribution.
+
+    Basically, each value is transformed into its z-score _within its group_ and then converted
+    back to original units using the overall mean and standard deviation. This "adjusts" the
+    metric as if all groups shared the same baseline (e.g. adjusting for inflation).
 
     Parameters:
         df (pd.DataFrame): The DataFrame containing the data.
-        metric_col (str): The column name of the metric to normalize.
-        group_col (str): The column to group by (default: 'release_year').
-        method (str): Normalization method. Options:
-            - 'zscore': Standardize using z-score (meaning you get the number of standard deviations from the group mean, and lose the original units).
-            - 'diff': Compute the difference from the group mean (adjusts for shifts, but not variance).
+        metric_col (str): The name of the metric column (e.g. 'price_original').
+        group_col (str): The column name for grouping (e.g. 'release_year').
 
     Returns:
-        pd.Series: The normalized metric as a new pandas Series.
+        pd.Series: A new Series with the metric adjusted for group trends.
 
     Example usage:
-        df_filtered["review_zscore"] = normalize_metric(df_filtered, "steam_positive_review_ratio", method="zscore")
-        df_filtered["review_diff"] = normalize_metric(df_filtered, "steam_positive_review_ratio", method="diff")
+        df["price_adjusted"] = adjust_metric_for_group_trends(df, "price_original", "release_year")
     """
-    # Calculate group statistics
+    # Compute group-specific mean and standard deviation
     group_mean = df.groupby(group_col)[metric_col].transform("mean")
+    group_std = df.groupby(group_col)[metric_col].transform("std")
 
-    if method == "zscore":
-        group_std = df.groupby(group_col)[metric_col].transform("std")
-        normalized = (df[metric_col] - group_mean) / group_std
-    elif method == "diff":
-        normalized = df[metric_col] - group_mean
-    else:
-        raise ValueError("Method must be either 'zscore' or 'diff'.")
+    # Calculate the z-score for each value within its group
+    z_scores = (df[metric_col] - group_mean) / group_std
 
-    return normalized
+    # Compute overall mean and standard deviation (across all groups)
+    overall_mean = df[metric_col].mean()
+    overall_std = df[metric_col].std()
+
+    # Convert the z-scores back to the original units using overall statistics
+    adjusted_metric = z_scores * overall_std + overall_mean
+
+    return adjusted_metric
 
 
 def ttest_two_groups(df, numeric_col, cat_col):
