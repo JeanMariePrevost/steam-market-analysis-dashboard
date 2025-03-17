@@ -151,8 +151,8 @@ def plot_categorical(
         df[temp_category_column] = df[category_column].astype(str).fillna("unknown")
 
         # normalize review scores against yearly trends (e.g. ratings tend to go up over time)
-        # if control_for_yearly_trends:
-        #     df[metric_column] = utils.normalize_metric_across_groups(df, metric_column, "release_year", method="diff")
+        if control_for_yearly_trends:
+            df[metric_column] = utils.adjust_metric_for_group_trends(df, metric_column, "release_year")
 
         # Test for significance
         f_stat, p_value, eta_squared = utils.anova_categorical(df, metric_column, temp_category_column)
@@ -215,17 +215,17 @@ def plot_categorical(
         # Use raw data for proper box plot distributions
         if horizontal:
             fig, ax = plt.subplots(figsize=(10, 6))
-            sns.boxplot(x=metric_column, y=temp_category_column, data=df, ax=ax)
-            ax.set_xlabel(f"Relative Distance from Mean {metric_label}")
+            sns.boxplot(x=metric_column, y=temp_category_column, data=df, ax=ax, showfliers=False, order=sorted(df[temp_category_column].unique()))
+            ax.set_xlabel(f"{metric_label} (Adjusted for {category_label})")
             ax.set_ylabel(category_label)
-            ax.set_title(f"Relative Distance from Mean {metric_label} by {category_label}")
+            ax.set_title(f"Adjusted {metric_label} by {category_label}")
             st.pyplot(fig)
         else:
             fig, ax = plt.subplots(figsize=(10, 6))
-            sns.boxplot(x=temp_category_column, y=metric_column, data=df, ax=ax)
+            sns.boxplot(x=temp_category_column, y=metric_column, data=df, ax=ax, showfliers=False, order=sorted(df[temp_category_column].unique()))
             ax.set_xlabel(category_label)
-            ax.set_ylabel(f"Relative Distance from Mean {metric_label}")
-            ax.set_title(f"Relative Distance from Mean {metric_label} by {category_label}")
+            ax.set_ylabel(f"{metric_label} (Adjusted for {category_label})")
+            ax.set_title(f"Adjusted {metric_label} by {category_label}")
             st.pyplot(fig)
 
 
@@ -522,20 +522,12 @@ rename_dict = {
 }
 df_temp["gamefaqs_difficulty_rating"] = df_temp["gamefaqs_difficulty_rating"].map(rename_dict)
 
-if is_default_review_score_analysis():
-    comment = 'Although negligible, we do see an unsurprising preference towards games considered "easy" to "just right", and a dislike of games considered too simple or too difficult. However, effect size is very small, and noise remains high.'
-elif is_default_estimated_owners_analysis():
-    comment = ""
-else:
-    comment = ""
-
 
 plot_categorical(
     df=df_temp,
     metric_column="steam_positive_review_ratio",
     category_column="gamefaqs_difficulty_rating",
     header="Game Difficulty",
-    body_after=comment,
     metric_label=target_metric_display_name,
     category_label="Game Difficulty Rating",
     horizontal=True,
@@ -665,7 +657,7 @@ def do_runs_on_platform():
         df_runs_on = df_filtered.copy()
 
         # normalize review scores against yearly trends
-        df_runs_on["steam_positive_review_ratio"] = utils.normalize_metric_across_groups(df_runs_on, "steam_positive_review_ratio", "release_year", method="diff")
+        df_runs_on["steam_positive_review_ratio"] = utils.adjust_metric_for_group_trends(df_runs_on, "steam_positive_review_ratio", "release_year")
 
         # Test for significance / detemination
         win_f_stat, win_p_value, win_r_squared, win_cohen_d = utils.ttest_two_groups(df_runs_on, "steam_positive_review_ratio", "runs_on_windows")
