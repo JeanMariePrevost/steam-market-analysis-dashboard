@@ -81,10 +81,10 @@ if st.sidebar.button("Reset Filters"):
 
 st.sidebar.markdown("---")
 st.sidebar.title("Data Cleaning")
-min_review_count = st.sidebar.number_input("Minimum number of reviews per game", value=10, min_value=1, key="min_review_count")
+min_review_count = st.sidebar.number_input("Minimum number of reviews per game", min_value=1, key="min_review_count")
 st.sidebar.caption("Games with very few reviews have a high chance of being fake or having skewed review scores. Suggested value: 10.")
 
-review_score_range = st.sidebar.slider("Review Scores Range", value=(0.1, 1.0), step=0.01, min_value=0.0, max_value=1.0, key="review_score_range")
+review_score_range = st.sidebar.slider("Review Scores Range", step=0.01, min_value=0.0, max_value=1.0, key="review_score_range")
 st.sidebar.caption("Games with very low scores are likely to be fake or shovelware. Suggested value: 0.1 to 1.0, or 0.1 to 0.99 to exclude perfect scores.")
 
 ############################################
@@ -169,7 +169,7 @@ def plot_categorical(
 
         # Print a description of the results
         # Determine significance level and effect size
-        precision = 6
+        precision = 3
         format_string = f".{precision}f"
 
         p_value = round(p_value, precision)
