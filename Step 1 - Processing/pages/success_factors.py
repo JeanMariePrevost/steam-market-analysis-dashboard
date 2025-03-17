@@ -50,11 +50,13 @@ selected_tag = tag_mapping.get(selected_tag_display, "All")  # Map back from sel
 # Sidebar Filter: Release Year Range
 min_year = int(df["release_year"].min())
 max_year = int(df["release_year"].max())
-selected_year_range = st.sidebar.slider("Select Release Year Range", min_year, max_year, (2010, max_year - 1))
+default_min_year = 2010
+default_max_year = 2024
+selected_year_range = st.sidebar.slider("Select Release Year Range", min_year, max_year, (default_min_year, default_max_year))
 
 st.sidebar.markdown("---")
 
-target_metric = st.sidebar.radio("Select a target metric:", ["Review Scores", "Estimated Owners"])
+target_metric_display_name = st.sidebar.radio("Select a target metric:", ["Review Scores", "Estimated Owners"])
 
 st.sidebar.markdown("---")
 min_review_count = st.sidebar.number_input("Minimum number of reviews per game", value=10, min_value=1)
@@ -196,6 +198,7 @@ def plot_numerical(
     body_after: str = None,
     metric_label: str = None,
     independent_var_label: str = None,
+    trend_line_degree: int = 1,
 ):
     """
     Plots a line chart of a metric against a numerical independent variable.
@@ -214,7 +217,9 @@ def plot_numerical(
 
         x = df[independent_var_column]
         y = df[metric_column]
-        trend_line, r2, individual_p_values, p_value, cohen_f2 = utils.polynomial_regression_analysis(x, y, 1)
+        # Sort values of x for trend line
+        x, y = zip(*sorted(zip(x, y)))
+        trend_line, r2, individual_p_values, p_value, cohen_f2 = utils.polynomial_regression_analysis(x, y, trend_line_degree)
 
         # Print a description of the results
         # Determine significance level
@@ -299,9 +304,6 @@ if df is None or df.empty:
     st.error(f"Data could not be loaded. Please ensure the path is correct and the data is available.")
     st.stop()
 
-if selected_tag == "Select a Tag":
-    st.warning("Please select a tag from the sidebar to begin analysis.")
-    st.stop()
 
 # Apply release year filter
 df_all_in_year_range = df[(df["release_year"] >= selected_year_range[0]) & (df["release_year"] <= selected_year_range[1])]
@@ -315,6 +317,15 @@ df_filtered = df_filtered[df_filtered["steam_total_reviews"] >= min_review_count
 
 # Filter out games with too low review scores
 df_filtered = df_filtered[df_filtered["steam_positive_review_ratio"] >= minimum_review_score]
+
+target_metric = "steam_positive_review_ratio" if target_metric_display_name == "Review Scores" else "estimated_owners_boxleiter"
+
+# remove 0 owners and nan owners games
+df_filtered = df_filtered[df_filtered["estimated_owners_boxleiter"] > 0]
+
+# remove estimated_owners_boxleiter
+q_low, q_high = df_filtered["estimated_owners_boxleiter"].quantile([0.01, 0.99])
+df_filtered = df_filtered[(df_filtered["estimated_owners_boxleiter"] >= q_low) & (df_filtered["estimated_owners_boxleiter"] <= q_high)]
 
 
 if df_filtered.empty:
@@ -349,7 +360,7 @@ df_temp = df_temp[(df_temp["achievements_count"] > 0) & (df_temp["achievements_c
 
 plot_numerical(
     df=df_temp,
-    metric_column="steam_positive_review_ratio",
+    metric_column=target_metric,
     independent_var_column="achievements_count",
     header="Achievements",
     body_after="So while we do see an upward trend, it is largely drowned out by the individual variance by title.",
@@ -552,7 +563,6 @@ plot_numerical(
     metric_column="steam_positive_review_ratio",
     independent_var_column="price_original",
     header="Launch Price",
-    body_after="This suggests that the launch price of a game has no significant impact on its review score.",
     metric_label="Review Score",
     independent_var_label="Original Price",
 )
@@ -654,7 +664,7 @@ plot_numerical(
 df_temp = df_filtered.copy()
 
 # remove N% outliers in terms of number of screenshots
-q_low, q_high = df_temp["steam_store_screenshot_count"].quantile([0.01, 0.99])
+q_low, q_high = df_temp["steam_store_screenshot_count"].quantile([0.00, 0.99])
 df_temp = df_temp[(df_temp["steam_store_screenshot_count"] >= q_low) & (df_temp["steam_store_screenshot_count"] <= q_high)]
 
 plot_numerical(
@@ -665,6 +675,7 @@ plot_numerical(
     body_before="This suggests that the number of screenshots a game has has no significant impact on the review score.",
     metric_label="Review Score",
     independent_var_label="Number of Screenshots",
+    trend_line_degree=2,
 )
 
 
@@ -705,17 +716,40 @@ plot_categorical(
 # Recap
 ##############################
 
-st.header("Summary of Findings")
+if target_metric_display_name == "Review Scores" and selected_year_range[0] == default_min_year and selected_year_range[1] == default_max_year and selected_tag == "All":
+    ## Default "full" analysis for review scores
+    st.header("Summary of Findings")
 
-st.write("Disappointingly, meta-features such as the number of screenshots, achievements or tags all have but very limited impacts on the review score of a game.")
-st.write("We suggest that, if anything, the only significant factors are the platform support and having sufficient tags.")
-results_message = "Here are the proportion of variance explained by each feature, in descending order:"
+    st.write("Disappointingly, meta-features such as the number of screenshots, achievements or tags all have but very limited impacts on the review score of a game.")
+    st.write("We suggest that, if anything, the only significant factors are the additions of Mac and Linux platform support, and having sufficient tags.")
+    results_message = "Here are the proportion of variance explained by each feature, in descending order:"
 
-# Sort the variance explained by each variable
-variance_explained_per_variable = {k: v for k, v in sorted(variance_explained_per_variable.items(), key=lambda item: item[1], reverse=True)}
+    # Sort the variance explained by each variable
+    variance_explained_per_variable = {k: v for k, v in sorted(variance_explained_per_variable.items(), key=lambda item: item[1], reverse=True)}
 
-# Print the variance explained by each variable
-for variable, variance in variance_explained_per_variable.items():
-    results_message += f"\n- **{variable}**: {variance:.3f}"
+    # Print the variance explained by each variable
+    for variable, variance in variance_explained_per_variable.items():
+        results_message += f"\n- **{variable}**: {variance:.3f}"
 
-st.write(results_message)
+    st.write(results_message)
+elif target_metric_display_name == "Estimated Owners" and selected_year_range[0] == default_min_year and selected_year_range[1] == default_max_year and selected_tag == "All":
+    ## Default "full" analysis for estimated owners
+    st.header("Summary of Findings")
+    st.write("TODO")
+
+    # st.write("Disappointingly, meta-features such as the number of screenshots, achievements or tags all have but very limited impacts on the number of estimated owners of a game.")
+    # st.write("We suggest that, if anything, the only significant factors are the platform support and having sufficient tags.")
+    # results_message = "Here are the proportion of variance explained by each feature, in descending order:"
+
+    # # Sort the variance explained by each variable
+    # variance_explained_per_variable = {k: v for k, v in sorted(variance_explained_per_variable.items(), key=lambda item: item[1], reverse=True)}
+
+    # # Print the variance explained by each variable
+    # for variable, variance in variance_exvariableplained_per_variable.items():
+    #     results_message += f"\n- **{variable}**: {variance:.3f}"
+
+    # st.write(results_message)
+else:
+    st.header("Summary of Findings")
+    # Dynamic summary
+    st.write("TODO")
