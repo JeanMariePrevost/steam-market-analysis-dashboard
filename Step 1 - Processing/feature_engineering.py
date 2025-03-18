@@ -6,12 +6,13 @@ NOTE: This processing does _not_ normalize all numerical fields, which is left t
 """
 
 import os
-import subprocess
+
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
-from utils import load_main_dataset
 
+from utils import load_main_dataset
 
 # def is_any_kind_of_na(value):
 #     if value == []:
@@ -125,13 +126,13 @@ fill_na_mappings = {
     "average_time_to_beat": median_fillna,
     "categories": empty_list_fillna,
     "controller_support": convert_controller_support,
-    "developers": first_of_list,
+    "developers": None,
     "dlc_count": median_fillna,
     "early_access": false_fillna,
     "estimated_gross_revenue_boxleiter": zero_fillna,
     "estimated_ltarpu": zero_fillna,
     "estimated_owners_boxleiter": zero_fillna,
-    "gamefaqs_difficulty_rating": convert_difficulty_rating,
+    "gamefaqs_difficulty_rating": None,
     "genres": empty_list_fillna,
     "has_demos": false_fillna,
     "has_drm": false_fillna,
@@ -147,10 +148,11 @@ fill_na_mappings = {
     "playtime_median_2_weeks": zero_fillna,
     "price_latest": zero_fillna,
     "price_original": None,
-    "publishers": first_of_list,
+    "publishers": None,
     "recommendations": zero_fillna,
-    "release_date": None,
-    "release_year": None,
+    "release_year": zero_fillna,
+    "release_month": zero_fillna,
+    "release_day_of_month": zero_fillna,
     "required_age": zero_fillna,
     "runs_on_linux": false_fillna,
     "runs_on_mac": false_fillna,
@@ -200,8 +202,9 @@ allow_na_mappings = {
     "price_original": None,
     "publishers": first_of_list,
     "recommendations": None,
-    "release_date": None,
     "release_year": None,
+    "release_month": None,
+    "release_day_of_month": None,
     "required_age": None,
     "runs_on_linux": None,
     "runs_on_mac": None,
@@ -218,25 +221,34 @@ allow_na_mappings = {
     "vr_supported": None,
 }
 
-
+###################################################################################
 # Work starts here
+###################################################################################
+
+
 tqdm.pandas()
 df = load_main_dataset()
 
-df_no_na = df.copy()
+
+###################################################################################
+# Date processing
+###################################################################################
+# Convert date columns to separete year, month, day columns
+# We already have the release_year column, so we can skip that one
+df["release_date"] = pd.to_datetime(df["release_date"])
+df["release_month"] = df["release_date"].dt.month
+df["release_day_of_month"] = df["release_date"].dt.day
+df.drop(columns=["release_date"], inplace=True)
+
+
+###################################################################################
+# Custom mappings of "NA-tolerant" set
+###################################################################################
 df_allow_na = df.copy()
 
 # Apply mappings
 for column_from_df in df.columns:
     print(f"Processing column {column_from_df}...")
-
-    # Apply the NA-intolerant mappings
-    if column_from_df in fill_na_mappings:
-        mapping = fill_na_mappings[column_from_df]
-        if mapping is not None:
-            df_no_na[column_from_df] = mapping(df[column_from_df])
-    else:
-        raise ValueError(f"No fill_na_mappings for {column_from_df}")
 
     # Apply the NA-tolerant mappings
     if column_from_df in allow_na_mappings:
@@ -246,19 +258,88 @@ for column_from_df in df.columns:
     else:
         raise ValueError(f"No allow_na_mappings for {column_from_df}")
 
+###################################################################################
+# Label encoding (for categorical columns)
+###################################################################################
+# Convert categorical columns to numerical values (including missing values) using pandas' factorize method
+columns_to_label_encode = [
+    "developers",
+    "early_access",
+    "has_demos",
+    "has_drm",
+    "monetization_model",
+    "publishers",
+    "runs_on_linux",
+    "runs_on_mac",
+    "runs_on_steam_deck",
+    "runs_on_windows",
+    "vr_only",
+    "vr_supported",
+]
+
+# Debug, print all unique values of the "developers" column
+print(len(df_allow_na["publishers"].unique()))
+print(df_allow_na["publishers"].unique())
+
+for column in columns_to_label_encode:
+    df_allow_na[column] = pd.factorize(df_allow_na[column], use_na_sentinel=True)[0]
+
+
+# Debug, print all unique values of the "developers" column
+print(len(df_allow_na["publishers"].unique()))
+print(df_allow_na["publishers"].unique())
+
+
+###################################################################################
+# Custom mappings of "No-NA" set
+###################################################################################
+df_no_na = df_allow_na.copy()
+
+# Apply mappings
+for column_from_df in df_allow_na.columns:
+    print(f"Processing column {column_from_df}...")
+
+    # Apply the NA-intolerant mappings
+    if column_from_df in fill_na_mappings:
+        mapping = fill_na_mappings[column_from_df]
+        if mapping is not None:
+            df_no_na[column_from_df] = mapping(df_allow_na[column_from_df])
+    else:
+        raise ValueError(f"No fill_na_mappings for {column_from_df}")
+
+
+# Debug, print all unique values of the "developers" column
+print(len(df_allow_na["publishers"].unique()))
+print(df_allow_na["publishers"].unique())
+
+print(len(df_no_na["publishers"].unique()))
+print(df_no_na["publishers"].unique())
+
 
 ###################################################################################
 # Dropping rows
 ###################################################################################
-# Drop _all_ rows that have _any_ NA values left in the first set
+# Drop _all_ rows that have _any_ NA values left in the no-NA set (if any)
+print(f"Df contains {df_no_na.isna().sum().sum()} NaNs")
+
+print(f"Number of rows before dropping NA rows: {len(df_no_na)}")
+
 df_no_na = df_no_na.dropna()
 
+print(f"Number of rows after dropping NA rows: {len(df_no_na)}")
+
+# Sanity check
 print("Df contains NaNs: ", df_no_na.isna().sum().sum() > 0)
 
 # If any, show where the first is
 if df_no_na.isna().sum().sum() > 0:
     print(df_no_na.isna().sum().idxmax())
+    raise ValueError("There are still NaNs in the no-NA set")
 
+
+# Debug, print all unique values of the "developers" column
+print(len(df_allow_na["publishers"].unique()))
+print(df_allow_na["publishers"].unique())
 
 ###################################################################################
 # One-Hot Encoding
@@ -322,19 +403,27 @@ for column, prefix in columns_to_explode.items():
 
 print("One-hot encoding complete ✅")
 
-# Drop _all_ rows that have _any_ NA values left in the first set
+# Drop _all_ rows that have _any_ NA values left in the first set (if we introduced any, something went wrong...)
 df_no_na = df_no_na.dropna()
 
-
+# Sanity check
 print("Df contains NaNs: ", df_no_na.isna().sum().sum() > 0)
 
 # If any, show where the first is
 if df_no_na.isna().sum().sum() > 0:
     print(df_no_na.isna().sum().idxmax())
+    raise ValueError("There are still NaNs in the no-NA set")
+
 
 ###################################################################################
 # Saving
 ###################################################################################
+
+# Debug, print all unique values of the "developers" column
+print(len(df_allow_na["publishers"].unique()))
+print(df_allow_na["publishers"].unique())
+print(len(df_no_na["publishers"].unique()))
+print(df_no_na["publishers"].unique())
 
 # Define and create output directory if it doesn't exist
 script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
