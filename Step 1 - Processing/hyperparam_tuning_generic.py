@@ -92,7 +92,7 @@ def objective(trial):
     mean_r2 = np.mean(scores)
     std_r2 = np.std(scores)
     # Penalize high variance
-    variance_penalty = 0.2 * std_r2
+    variance_penalty = 0.1 * std_r2
     adjusted_r2 = mean_r2 - variance_penalty  # This will be the "score" as far as Optuna is concerned
 
     global times_to_train
@@ -168,20 +168,20 @@ def print_progress_callback(study, trial):
 #################################################################
 # Study
 #################################################################
-number_of_trials = 300  # Length of study, stored in a vraiable to be able to print as we progress
+number_of_trials = 500  # Length of study, stored in a vraiable to be able to print as we progress
 
 
 def get_trial_params(trial):
     return {
-        "iterations": 50,
-        "learning_rate": trial.suggest_float("learning_rate", 0.15, 0.25),
-        "depth": 6,
+        "iterations": trial.suggest_int("iterations", 20, 40),
+        "learning_rate": trial.suggest_float("learning_rate", 0.01, 1.0, log=True),
+        "depth": trial.suggest_int("depth", 2, 10),
         "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1e-3, 1.0, log=True),
         "loss_function": "RMSE",
-        "early_stopping_rounds": trial.suggest_int("early_stopping_rounds", 3, 20),
-        "subsample": trial.suggest_float("subsample", 0.05, 0.35),
-        "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.4, 1.0),
-        "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 25, 120),
+        "early_stopping_rounds": trial.suggest_int("early_stopping_rounds", 2, 40),
+        "subsample": trial.suggest_float("subsample", 0.01, 1.0),
+        "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.01, 1.0),
+        "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 2, 120),
     }
 
 
@@ -203,7 +203,10 @@ pruner = optuna.pruners.HyperbandPruner()
 study = optuna.create_study(direction="maximize", pruner=pruner)
 
 # Optimize the objective over N trials
-study.optimize(objective, n_trials=number_of_trials, callbacks=[print_progress_callback])
+try:
+    study.optimize(objective, n_trials=number_of_trials, callbacks=[print_progress_callback])
+except KeyboardInterrupt:
+    print("Interrupted by user")
 
 
 #################################################################
