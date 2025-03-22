@@ -317,6 +317,23 @@ print(df_no_na["publishers"].unique())
 
 
 ###################################################################################
+# Introducing "meta" rows
+###################################################################################
+# "Count" columns
+df_no_na["categories_count"] = df_no_na["categories"].apply(len)
+df_no_na["genres_count"] = df_no_na["genres"].apply(len)
+df_no_na["languages_supported_count"] = df_no_na["languages_supported"].apply(len)
+df_no_na["languages_with_full_audio_count"] = df_no_na["languages_with_full_audio"].apply(len)
+df_no_na["tags_count"] = df_no_na["tags"].apply(len)
+
+df_allow_na["categories_count"] = df_allow_na["categories"].apply(len)
+df_allow_na["genres_count"] = df_allow_na["genres"].apply(len)
+df_allow_na["languages_supported_count"] = df_allow_na["languages_supported"].apply(len)
+df_allow_na["languages_with_full_audio_count"] = df_allow_na["languages_with_full_audio"].apply(len)
+df_allow_na["tags_count"] = df_allow_na["tags"].apply(len)
+
+
+###################################################################################
 # Dropping rows
 ###################################################################################
 # Drop _all_ rows that have _any_ NA values left in the no-NA set (if any)
@@ -347,13 +364,15 @@ print(df_allow_na["publishers"].unique())
 # Here we explode every "list of strings" column into a set of one-hot encoded columns
 # This is done for both the NA-intolerant and NA-tolerant sets
 
+prefix_for_sorting = "~"  # Prefix used to sort the one-hot encoded columns to the _end_ of the DataFrame for better readability
+
 # Define the columns to explode
 columns_to_explode = {
-    "categories": "category_",
-    "genres": "genre_",
-    "languages_supported": "lang_",
-    "languages_with_full_audio": "lang_audio_",
-    "tags": "tag_",
+    "categories": prefix_for_sorting + "categroy_",
+    "genres": prefix_for_sorting + "genre_",
+    "languages_supported": prefix_for_sorting + "lang_",
+    "languages_with_full_audio": prefix_for_sorting + "lang_audio_",
+    "tags": prefix_for_sorting + "tag_",
 }
 
 
@@ -416,8 +435,13 @@ if df_no_na.isna().sum().sum() > 0:
 
 
 ###################################################################################
-# Saving
+# Final prep and Saving
 ###################################################################################
+
+# Sort columns alphabetically for better readability
+df_no_na = df_no_na.reindex(sorted(df_no_na.columns), axis=1)
+df_allow_na = df_allow_na.reindex(sorted(df_allow_na.columns), axis=1)
+
 
 # Debug, print all unique values of the "developers" column
 print(len(df_allow_na["publishers"].unique()))
