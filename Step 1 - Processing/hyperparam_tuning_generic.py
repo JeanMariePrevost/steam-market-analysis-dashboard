@@ -616,7 +616,7 @@ low_relevance_columns = [
     "~genre_adventure",
 ]
 
-data = data.drop(columns=low_relevance_columns, errors="ignore")
+# data = data.drop(columns=low_relevance_columns, errors="ignore")
 
 
 # Remove irrelevant, directly-correlated, and "unavailable at prediction time" columns (e.g. you can't have your review score before the game is released)
@@ -665,6 +665,8 @@ latest_trial_results = None
 latest_trial_params = None
 last_start_time = None
 times_to_train = []
+trials_since_last_improvement = 0
+last_improvement_amount = 0.0
 
 
 #################################################################
@@ -739,8 +741,18 @@ def print_progress_callback(study, trial):
     is_new_best = latest_trial_results["adjusted_r2"] == best_trial_results["adjusted_r2"]
     best_adjusted_r2_tag = f"{BOLD}{GREEN}(NEW BEST){RESET}"
 
+    global trials_since_last_improvement
     if not is_new_best:
-        best_adjusted_r2_tag = f"{GRAY}(best: {best_trial_results['adjusted_r2']:.3f}){RESET}"
+        best_adjusted_r2_tag = f"{GRAY}(best: {best_trial_results['adjusted_r2']:.4f}){RESET}"
+        trials_since_last_improvement += 1
+    else:
+        trials_since_last_improvement = 0
+        if trial.number > 1:
+            previous_best = list(trials_results_sorted.values())[1]["adjusted_r2"]
+        else:
+            previous_best = 0.0
+        global last_improvement_amount
+        last_improvement_amount = latest_trial_results["adjusted_r2"] - previous_best
 
     duration = (datetime.now() - last_start_time).total_seconds()
     median_duration = np.median([t.total_seconds() for t in times_to_train])
@@ -753,19 +765,34 @@ def print_progress_callback(study, trial):
 
     print(
         f"\n{BOLD}{CYAN}=== Trial {trial.number} of {max_trials} ({model_class.__name__}) ==={RESET}\n"
-        f"{YELLOW}  {'Adjusted R²:':20} {latest_trial_results['adjusted_r2']:> 8.3f}   {best_adjusted_r2_tag}\n"
-        f"{YELLOW}  {'Mean Raw R²:':20} {latest_trial_results['mean_r2']:> 8.3f}   {GRAY}(best: {best_trial_results['mean_r2']:.3f}){RESET}\n"
-        f"{YELLOW}  {'Variance Penalty:':20} {latest_trial_results['variance_penalty']:> 8.3f}   {GRAY}(median: {median_penalty:.3f}){RESET}\n"
+        f"{YELLOW}  {'Adjusted R²:':20} {latest_trial_results['adjusted_r2']:> 8.4f}   {best_adjusted_r2_tag}\n"
+        f"{YELLOW}  {'Mean Raw R²:':20} {latest_trial_results['mean_r2']:> 8.4f}   {GRAY}(best: {best_trial_results['mean_r2']:.4f}){RESET}\n"
+        f"{YELLOW}  {'Variance Penalty:':20} {latest_trial_results['variance_penalty']:> 8.4f}   {GRAY}(median: {median_penalty:.4f}){RESET}\n"
         f"{YELLOW}  {'Time to train:':20} {duration:> 7.2f}s   {GRAY}(median: {median_duration:.2f}s){RESET} "
         f"{GRAY}  ({'Estimated time remaining:':20} {estimated_seconds_remaining:.2f}s, or {formatted_time}){RESET}\n"
     )
 
+    # Printing progress info like "what and when was the last improvement"
+    DIM_GREEN = "\033[2;32m"  # Dim Green
+    DIM_CYAN = "\033[2;36m"  # Dim Cyan
+    DIM_ORANGE = "\033[2;38;5;208m"  # Dim Orange (using 256-color code 208)
+    DIM_RED = "\033[2;31m"  # Dim Red
+    RESET = "\033[0m"  # Resets all attributes
+    if trials_since_last_improvement < 30:
+        print(f"{DIM_GREEN}Last improvement: +{last_improvement_amount:.4f} ({trials_since_last_improvement} trials ago){RESET}")
+    elif trials_since_last_improvement < 75:
+        print(f"{DIM_CYAN}Last improvement: +{last_improvement_amount:.4f} ({trials_since_last_improvement} trials ago){RESET}")
+    elif trials_since_last_improvement < 150:
+        print(f"{DIM_ORANGE}Last improvement: +{last_improvement_amount:.4f} ({trials_since_last_improvement} trials ago, consider adjusting the search space?){RESET}")
+    else:  # count >= 100
+        print(f"{DIM_RED}Last improvement: +{last_improvement_amount:.4f} ({trials_since_last_improvement} trials ago, probably stuck, adjust the search space){RESET}")
+
     # Append latest results to a file, using the model as part of the name
     global latest_trial_params
     full_latest_result_log_string = (
-        f"Score: {latest_trial_results['adjusted_r2']:.3f}, Mean R²: {latest_trial_results['mean_r2']:.3f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
+        f"Score: {latest_trial_results['adjusted_r2']:.4f}, Mean R²: {latest_trial_results['mean_r2']:.4f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
     )
-    full_best_result_log_string = f"Score: {best_trial_results['adjusted_r2']:.3f}, Mean R²: {best_trial_results['mean_r2']:.3f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
+    full_best_result_log_string = f"Score: {best_trial_results['adjusted_r2']:.4f}, Mean R²: {best_trial_results['mean_r2']:.4f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
 
     model_name = model_class.__name__
     with open(f"tuning_results_{model_name}.txt", "a", encoding="utf-8") as f:
@@ -783,29 +810,34 @@ max_trials = 1500  # Length of study, stored in a variable to be able to print a
 
 def get_trial_params(trial):
     params = {
-        # "bootstrap": trial.suggest_categorical("bootstrap", [True, False]),
-        "ccp_alpha": 0.000151,
-        "criterion": "friedman_mse",
-        "max_depth": 11,
-        "max_features": trial.suggest_categorical("max_features", ["sqrt", 0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]),
-        "max_samples": 0.855,
-        "min_impurity_decrease": 0.3437,
-        "max_leaf_nodes": trial.suggest_int("max_leaf_nodes", 60, 150),
-        "min_samples_leaf": 2,
-        "min_samples_split": trial.suggest_int("min_samples_split", 5, 9),
-        "min_weight_fraction_leaf": trial.suggest_float("min_weight_fraction_leaf", 1e-6, 1e-3, log=True),
-        "n_estimators": trial.suggest_int("n_estimators", 30, 150, log=True),
+        # "booster": trial.suggest_categorical("booster", ["gbtree", "gblinear", "dart"]),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.001, 0.999),
+        "eval_metric": "rmsle",
+        "feature_selector": "greedy",
+        "gamma": trial.suggest_float("gamma", 0.01, 20.0, log=True),
+        "grow_policy": "lossguide",
+        "learning_rate": trial.suggest_float("learning_rate", 0.5, 1.0),
+        "max_delta_step": 1,
+        "max_depth": 6,
+        "max_leaves": trial.suggest_int("max_leaves", 6, 30),
+        "min_child_weight": 6,
+        "n_estimators": trial.suggest_int("n_estimators", 5, 55),
+        "num_parallel_tree": trial.suggest_int("num_parallel_tree", 10, 30),
+        "reg_alpha": trial.suggest_float("reg_alpha", 0.00001, 20.0, log=True),
+        "reg_lambda": trial.suggest_float("reg_lambda", 0.00001, 20.0, log=True),
+        "subsample": trial.suggest_float("subsample", 0.8, 1.0),
+        "tree_method": "hist",
     }
 
     return params
 
 
-model_class = RandomForestRegressor
-
 fixed_params = {
-    # "verbose": -1,
-    # "random_seed": 42,
+    "verbosity": 0,  # Suppress XGBRegressor output
+    # "verbose": -1,  # Suppress LGBMRegressor output
 }
+
+model_class = XGBRegressor
 
 # Set Optuna verbosity to WARNING, I use my own print_progress_callback to print the results
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -840,12 +872,12 @@ def show_best_results():
     # Print the 10 best results as adjusted R², mean R2, and params
     print("\nTop 10 best results:")
     for i, (params, results) in enumerate(list(trials_results_sorted.items())[:10]):
-        print(f"Adjusted R²: {results['adjusted_r2']:.3f}, Mean R²: {results['mean_r2']:.3f}, Time to train: {results['time_to_train']} -> Params: {params}")
+        print(f"Adjusted R²: {results['adjusted_r2']:.4f}, Mean R²: {results['mean_r2']:.4f}, Time to train: {results['time_to_train'].total_seconds():.2f}s, Params: {params}")
 
     input("Press Enter to return to main menu...")
 
 
-def analyze_importances():
+def show_hyperparameter_importances():
     # Print hyperparameters importance
     print("Preparing hyperparameters importances...")
     importances = optuna.importance.get_param_importances(study)
@@ -869,16 +901,22 @@ def show_history_plot():
     fig.show()
 
 
+# Always start with running the study to avoid running the script without any results
+run_study()
+
 while True:
+    banner_width = 60
+    inner_width = banner_width - 2
     print("\n" * 2)
-    print("╔═════════════════════╗")
-    print("║     MAIN MENU       ║")
-    print("╚═════════════════════╝")
+    print("╔" + "═" * inner_width + "╗")
+    print("║" + "MAIN MENU".center(inner_width) + "║")
+    print("║" + ("(" + model_class.__name__ + ")").center(inner_width) + "║")
+    print("╚" + "═" * inner_width + "╝")
     print("1. Run/Resume study")
     print("2. Show best results")
     print("3. Show slice plot")
     print("4. Show history plot")
-    print("5. Analyze importances")
+    print("5. Show hyperparameter importances")
     print("6. Exit")
     choice = input("")
 
@@ -891,7 +929,7 @@ while True:
     elif choice == "4":
         show_history_plot()
     elif choice == "5":
-        analyze_importances()
+        show_hyperparameter_importances()
     elif choice == "6":
         choice = input("Are you sure you want to exit? (y/n)")
         if choice.lower() == "y":
