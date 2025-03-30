@@ -12,9 +12,10 @@ import pandas as pd
 from catboost import CatBoostRegressor
 from lightgbm import LGBMRegressor
 from optuna.trial import TrialState
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
 from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.tree import DecisionTreeRegressor
 from xgboost import XGBRegressor
 
 import utils
@@ -805,39 +806,31 @@ def print_progress_callback(study, trial):
 #################################################################
 # Study
 #################################################################
-max_trials = 1500  # Length of study, stored in a variable to be able to print as we progress
+max_trials = 2500  # Length of study, stored in a variable to be able to print as we progress
 
 
 def get_trial_params(trial):
     params = {
-        # "booster": trial.suggest_categorical("booster", ["gbtree", "gblinear", "dart"]),
-        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.001, 0.999),
-        "eval_metric": "rmsle",
-        "feature_selector": "greedy",
-        "gamma": trial.suggest_float("gamma", 0.01, 20.0, log=True),
-        "grow_policy": "lossguide",
-        "learning_rate": trial.suggest_float("learning_rate", 0.5, 1.0),
-        "max_delta_step": 1,
-        "max_depth": 6,
-        "max_leaves": trial.suggest_int("max_leaves", 6, 30),
-        "min_child_weight": 6,
-        "n_estimators": trial.suggest_int("n_estimators", 5, 55),
-        "num_parallel_tree": trial.suggest_int("num_parallel_tree", 10, 30),
-        "reg_alpha": trial.suggest_float("reg_alpha", 0.00001, 20.0, log=True),
-        "reg_lambda": trial.suggest_float("reg_lambda", 0.00001, 20.0, log=True),
-        "subsample": trial.suggest_float("subsample", 0.8, 1.0),
-        "tree_method": "hist",
+        "n_estimators": trial.suggest_int("n_estimators", 20, 1000, log=True),
+        "criterion": trial.suggest_categorical("criterion", ["squared_error", "friedman_mse"]),
+        "max_depth": trial.suggest_int("max_depth", 2, 64),
+        "min_samples_split": trial.suggest_int("min_samples_split", 2, 100),
+        "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 100),
+        "max_features": trial.suggest_float("max_features", 0.01, 1.0),
+        "min_impurity_decrease": trial.suggest_float("min_impurity_decrease", 0.0, 5.0),
+        "bootstrap": trial.suggest_categorical("bootstrap", [True, False]),
+        "ccp_alpha": trial.suggest_float("ccp_alpha", 1e-5, 10.0, log=True),
     }
 
     return params
 
 
 fixed_params = {
-    "verbosity": 0,  # Suppress XGBRegressor output
+    # "verbosity": 0,  # Suppress XGBRegressor output
     # "verbose": -1,  # Suppress LGBMRegressor output
 }
 
-model_class = XGBRegressor
+model_class = ExtraTreesRegressor
 
 # Set Optuna verbosity to WARNING, I use my own print_progress_callback to print the results
 optuna.logging.set_verbosity(optuna.logging.WARNING)
