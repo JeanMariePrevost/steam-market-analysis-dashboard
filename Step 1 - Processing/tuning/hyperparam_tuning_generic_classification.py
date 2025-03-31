@@ -10,6 +10,7 @@ import numpy as np
 import optuna
 import pandas as pd
 from catboost import CatBoostClassifier
+from sklearn.metrics import classification_report
 from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.preprocessing import QuantileTransformer
 
@@ -172,16 +173,21 @@ def objective(trial):
     model = model_class(**params)
 
     print(f"Training {model_class.__name__} , trial {trial.number}...")
-    scores = cross_val_score(model, X_train, y_train, cv=5, scoring="accuracy", n_jobs=-1)
+    # Previous "accuracy" based score
+    # scores = cross_val_score(model, X_train, y_train, cv=5, scoring="accuracy", n_jobs=-1)
+    # # Calculate the mean and standard deviation of the cross-validation scores.
+    # print("Training complete, calculating adjusted accuracy...")
+    # mean_acc = np.mean(scores)
+    # std_acc = np.std(scores)
 
-    # Calculate the mean and standard deviation of the cross-validation scores.
-    print("Training complete, calculating adjusted accuracy...")
-    mean_acc = np.mean(scores)
-    std_acc = np.std(scores)
+    # New weighted F1 score
+    scores = cross_val_score(model, X_train, y_train, cv=5, scoring="f1_weighted", n_jobs=-1)
+
+    weighted_f1 = np.mean(scores)
 
     # Apply a simple variance penalty.
-    variance_penalty = 0.1 * std_acc
-    adjusted_acc = mean_acc - variance_penalty  # This is what Optuna will try to maximize.
+    # variance_penalty = 0.1 * std_acc
+    # adjusted_acc = mean_acc - variance_penalty  # This is what Optuna will try to maximize.
 
     # Track training time for this trial.
     global times_to_train
@@ -190,10 +196,10 @@ def objective(trial):
     # Store the results for later inspection.
     key = str(params)
     trials_results[key] = {
-        "mean_accuracy": mean_acc,
-        "std_accuracy": std_acc,
-        "variance_penalty": variance_penalty,
-        "adjusted_accuracy": adjusted_acc,
+        "trial_score": weighted_f1,
+        # "std_accuracy": std_acc,
+        # "variance_penalty": variance_penalty,
+        # "trial_score": adjusted_acc,
         "trial_number": trial.number,
         "time_to_train": times_to_train[-1],
         "trial_object": trial,
@@ -205,13 +211,17 @@ def objective(trial):
     global latest_trial_params
     latest_trial_params = params
 
+    # Debug, print full report
+    # model.fit(X_train, y_train, eval_set=(X_valid, y_valid), verbose=0) # We need to re-fit the model to get the predictions, because cross_val_score doesn't return them
+    # print(classification_report(y_valid, model.predict(X_valid), zero_division=0))
+
     # Since higher accuracy is better, we return the adjusted_acc as our objective.
-    return adjusted_acc
+    return weighted_f1
 
 
 def print_progress_callback(study, trial):
-    # Sort the results by adjusted_accuracy
-    trials_results_sorted = {k: v for k, v in sorted(trials_results.items(), key=lambda item: item[1]["adjusted_accuracy"], reverse=True)}
+    # Sort the results by score
+    trials_results_sorted = {k: v for k, v in sorted(trials_results.items(), key=lambda item: item[1]["trial_score"], reverse=True)}
     best_trial_results = list(trials_results_sorted.values())[0]
 
     # ANSI color codes
@@ -222,25 +232,25 @@ def print_progress_callback(study, trial):
     BOLD = "\033[1m"
     RESET = "\033[0m"
 
-    is_new_best = latest_trial_results["adjusted_accuracy"] == best_trial_results["adjusted_accuracy"]
+    is_new_best = latest_trial_results["trial_score"] == best_trial_results["trial_score"]
     best_adjusted_acc_tag = f"{BOLD}{GREEN}(NEW BEST){RESET}"
 
     global trials_since_last_improvement
     if not is_new_best:
-        best_adjusted_acc_tag = f"{GRAY}(best: {best_trial_results['adjusted_accuracy']:.4f}){RESET}"
+        best_adjusted_acc_tag = f"{GRAY}(best: {best_trial_results['trial_score']:.4f}){RESET}"
         trials_since_last_improvement += 1
     else:
         trials_since_last_improvement = 0
         if trial.number > 1:
-            previous_best = list(trials_results_sorted.values())[1]["adjusted_accuracy"]
+            previous_best = list(trials_results_sorted.values())[1]["trial_score"]
         else:
             previous_best = 0.0
         global last_improvement_amount
-        last_improvement_amount = latest_trial_results["adjusted_accuracy"] - previous_best
+        last_improvement_amount = latest_trial_results["trial_score"] - previous_best
 
     duration = (datetime.now() - last_start_time).total_seconds()
     median_duration = np.median([t.total_seconds() for t in times_to_train])
-    median_penalty = np.median([r["variance_penalty"] for r in trials_results_sorted.values()])
+    # median_penalty = np.median([r["variance_penalty"] for r in trials_results_sorted.values()])
     estimated_seconds_remaining = (max_trials - trial.number) * median_duration
 
     hours = int(estimated_seconds_remaining // 3600)
@@ -249,9 +259,9 @@ def print_progress_callback(study, trial):
 
     print(
         f"\n{BOLD}{CYAN}=== Trial {trial.number} of {max_trials} ({model_class.__name__}) ==={RESET}\n"
-        f"{YELLOW}  {'Adjusted Acc:':20} {latest_trial_results['adjusted_accuracy']:> 8.4f}   {best_adjusted_acc_tag}\n"
-        f"{YELLOW}  {'Mean Acc:':20} {latest_trial_results['mean_accuracy']:> 8.4f}   {GRAY}(best: {best_trial_results['mean_accuracy']:.4f}){RESET}\n"
-        f"{YELLOW}  {'Variance Penalty:':20} {latest_trial_results['variance_penalty']:> 8.4f}   {GRAY}(median: {median_penalty:.4f}){RESET}\n"
+        f"{YELLOW}  {'Score:':20} {latest_trial_results['trial_score']:> 8.4f}   {best_adjusted_acc_tag}\n"
+        # f"{YELLOW}  {'Mean Acc:':20} {latest_trial_results['mean_accuracy']:> 8.4f}   {GRAY}(best: {best_trial_results['mean_accuracy']:.4f}){RESET}\n"
+        # f"{YELLOW}  {'Variance Penalty:':20} {latest_trial_results['variance_penalty']:> 8.4f}   {GRAY}(median: {median_penalty:.4f}){RESET}\n"
         f"{YELLOW}  {'Time to train:':20} {duration:> 7.2f}s   {GRAY}(median: {median_duration:.2f}s){RESET} "
         f"{GRAY}  ({'Estimated time remaining:':20} {estimated_seconds_remaining:.2f}s, or {formatted_time}){RESET}\n"
     )
@@ -274,10 +284,12 @@ def print_progress_callback(study, trial):
     # Append latest results to a file, using the model as part of the name
     global latest_trial_params
     full_latest_result_log_string = (
-        f"Score: {latest_trial_results['adjusted_accuracy']:.4f}, Mean Acc: {latest_trial_results['mean_accuracy']:.4f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
+        f"Score: {latest_trial_results['trial_score']:.4f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
+        # f"Score: {latest_trial_results['trial_score']:.4f}, Mean Acc: {latest_trial_results['mean_accuracy']:.4f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
     )
     full_best_result_log_string = (
-        f"Score: {best_trial_results['adjusted_accuracy']:.4f}, Mean Acc: {best_trial_results['mean_accuracy']:.4f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
+        f"Score: {best_trial_results['trial_score']:.4f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
+        # f"Score: {best_trial_results['trial_score']:.4f}, Mean Acc: {best_trial_results['mean_accuracy']:.4f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
     )
 
     model_name = model_class.__name__
@@ -345,12 +357,12 @@ def run_study():
 
 def show_best_results():
     # Sort results by adjusted score
-    trials_results_sorted = {k: v for k, v in sorted(trials_results.items(), key=lambda item: item[1]["adjusted_accuracy"], reverse=True)}
+    trials_results_sorted = {k: v for k, v in sorted(trials_results.items(), key=lambda item: item[1]["trial_score"], reverse=True)}
 
     # Print the 10 best results
     print("\nTop 10 best results:")
     for i, (params, results) in enumerate(list(trials_results_sorted.items())[:10]):
-        print(f"Adjusted Acc: {results['adjusted_accuracy']:.4f}, Mean Acc: {results['mean_accuracy']:.4f}, Time to train: {results['time_to_train'].total_seconds():.2f}s, Params: {params}")
+        print(f"Adjusted Acc: {results['trial_score']:.4f}, Mean Acc: {results['mean_accuracy']:.4f}, Time to train: {results['time_to_train'].total_seconds():.2f}s, Params: {params}")
 
     input("Press Enter to return to main menu...")
 
