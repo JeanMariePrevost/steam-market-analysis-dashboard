@@ -12,3 +12,4 @@ Step 1 - Processing/combined_df_cleaned.parquet
 *.parquet
 *.docx
 */catboost_info/*
+*tuning_results_*.txt
