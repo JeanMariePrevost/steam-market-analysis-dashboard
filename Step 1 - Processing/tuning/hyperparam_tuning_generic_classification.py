@@ -10,7 +10,7 @@ import numpy as np
 import optuna
 import pandas as pd
 from catboost import CatBoostClassifier
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, cohen_kappa_score, make_scorer
 from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.preprocessing import QuantileTransformer
 
@@ -71,12 +71,30 @@ y = data["steam_total_reviews"]  # Extract the target
 
 # Since this is a classification task, we need to convert the target to a categorical variable
 # First, we define the bins cuttoffs for the target variable
-bins = [-np.inf, 49, 999, np.inf]  # Limited bins for testing
+# bins = [-np.inf, 49, 999, np.inf]  # Limited to 3 bins for testing
+bins = [-np.inf, 49, 299, 999, 9999, np.inf]  # Moderate set of 5 bins
 # bins = [-np.inf, 49, 99, 299, 999, 2499, 9999, 19999, np.inf] # Full set of bins
 labels = range(len(bins) - 1)  # Create labels for the bins, e.g. [0, 1, 2, ...]
 y_binned = pd.cut(y, bins=bins, labels=labels)
 y = pd.Series(y_binned, name="steam_total_reviews")  # Convert the binned target variable to a Series
-print(f"Target variable (steam_total_reviews) has {len(y.unique())} unique values after binning.")
+
+#########################
+# Print some debug info on the binning results
+print(f"Target variable (steam_total_reviews) has {len(y.unique())} unique values after binning:")
+bin_bounds = [f"({bins[i]}, {bins[i+1]}]" for i in range(len(bins) - 1)]  # Create human-readable bin labels
+bin_counts = y.value_counts().sort_index()  # Count the elements in each bin and sort by bin order
+
+# Build a DataFrame for the summary table
+table = pd.DataFrame(
+    {
+        "Bin": bin_bounds,
+        "Count": bin_counts.values,
+    }
+)
+table["Percentage"] = (table["Count"] / table["Count"].sum() * 100).round(2)
+
+print(table.to_string(index=False))  # Print the table
+#########################
 
 
 #################################
@@ -172,22 +190,18 @@ def objective(trial):
 
     model = model_class(**params)
 
-    print(f"Training {model_class.__name__} , trial {trial.number}...")
-    # Previous "accuracy" based score
-    # scores = cross_val_score(model, X_train, y_train, cv=5, scoring="accuracy", n_jobs=-1)
-    # # Calculate the mean and standard deviation of the cross-validation scores.
-    # print("Training complete, calculating adjusted accuracy...")
-    # mean_acc = np.mean(scores)
-    # std_acc = np.std(scores)
+    # print(f"Training {model_class.__name__} , trial {trial.number}...")
+    # scores = cross_val_score(model, X_train, y_train, cv=5, scoring="f1_weighted", n_jobs=-1)  #  New weighted F1 score
+    # weighted_f1 = np.mean(scores)
 
-    # New weighted F1 score
-    scores = cross_val_score(model, X_train, y_train, cv=5, scoring="f1_weighted", n_jobs=-1)
+    # Trying a custom score that accounts for orinality, meaning large mistakes are penalized more
+    def weighted_kappa(y_true, y_pred):
+        return cohen_kappa_score(y_true, y_pred, weights="quadratic")
 
-    weighted_f1 = np.mean(scores)
+    custom_scorer = make_scorer(weighted_kappa)
 
-    # Apply a simple variance penalty.
-    # variance_penalty = 0.1 * std_acc
-    # adjusted_acc = mean_acc - variance_penalty  # This is what Optuna will try to maximize.
+    scores = cross_val_score(model, X_train, y_train, cv=5, scoring=custom_scorer, n_jobs=-1)
+    mean_score = np.mean(scores)
 
     # Track training time for this trial.
     global times_to_train
@@ -196,10 +210,7 @@ def objective(trial):
     # Store the results for later inspection.
     key = str(params)
     trials_results[key] = {
-        "trial_score": weighted_f1,
-        # "std_accuracy": std_acc,
-        # "variance_penalty": variance_penalty,
-        # "trial_score": adjusted_acc,
+        "trial_score": mean_score,
         "trial_number": trial.number,
         "time_to_train": times_to_train[-1],
         "trial_object": trial,
@@ -216,7 +227,7 @@ def objective(trial):
     # print(classification_report(y_valid, model.predict(X_valid), zero_division=0))
 
     # Since higher accuracy is better, we return the adjusted_acc as our objective.
-    return weighted_f1
+    return mean_score
 
 
 def print_progress_callback(study, trial):
