@@ -57,9 +57,12 @@ columns_to_drop = [
     "~tag_cult classic",  # Remove fully "outcome based" tags
 ]
 
-# For slower models or initial exploration, consider using only a small subsample of the data
-# Even 0.05 seems to be enough to get a good idea of the model's "rough" performance for initial exploration
-fraction = 1.0  # Fraction of the data to use for training
+######################################################
+# Stratified sampling (optional)
+######################################################
+# If you want to use only a fraction of the data for faster testing, set the fraction here.
+# Even 0.05 works surprisingly well for very rough initial exploration
+fraction = 0.05  # Fraction of the data to use for training
 if fraction < 1.0:
     # Create a stratified sample of the data
     fraction_strata_bins = pd.cut(data["steam_total_reviews"], bins=10, labels=False)
@@ -69,47 +72,26 @@ if fraction < 1.0:
     print(f"Number of rows in the sample: {len(sample)}")
     data = sample
 
+######################################################
+# Target variable binning (making it categorical)
+######################################################
+# Since this is a classification task, we need to convert the target to a categorical variable by using binning.
 y = data["steam_total_reviews"]  # Extract the target
-
-# Since this is a classification task, we need to convert the target to a categorical variable
-# First, we define the bins cuttoffs for the target variable
-# bins = [-np.inf, 50, 300, 1000, 2500, 10000, np.inf]
 bins = [-np.inf, 50, 100, 250, 500, 1000, 2500, 5000, np.inf]
-labels = range(len(bins) - 1)  # Create labels for the bins, e.g. [0, 1, 2, ...]
+labels = range(len(bins) - 1)  # Create labels (or "values") for the bins, e.g. [0, 1, 2, ...]
 y_binned = pd.cut(y, bins=bins, labels=labels)
 y = pd.Series(y_binned, name="steam_total_reviews")  # Convert the binned target variable to a Series
 
-#########################
 # Print some debug info on the binning results
 print(f"Target variable (steam_total_reviews) has {len(y.unique())} unique values after binning:")
-bin_bounds = [f"({bins[i]}, {bins[i+1]}]" for i in range(len(bins) - 1)]  # Create human-readable bin labels
-bin_counts = y.value_counts().sort_index()  # Count the elements in each bin and sort by bin order
-
-# Build a DataFrame for the summary table
-table = pd.DataFrame(
-    {
-        "Bin": bin_bounds,
-        "Count": bin_counts.values,
-    }
-)
+table = pd.DataFrame({"Bin": [f"({bins[i]}, {bins[i+1]}]" for i in range(len(bins) - 1)], "Count": y.value_counts().sort_index().values})
 table["Percentage"] = (table["Count"] / table["Count"].sum() * 100).round(2)
-
-print(table.to_string(index=False))  # Print the table
-#########################
+print(table.to_string(index=False))
 
 
 #################################
-# Testing target scaling
+# Testing target scaling (not needed for classification?)
 #################################
-# StandardScaler, mean=0, std=1, does NOTHING for skewness
-# scaler = StandardScaler()
-# y = scaler.fit_transform(y.values.reshape(-1, 1)).flatten()
-
-# QuantileTransformer to get a normal distribution output, very good for distributing the data points while maintaining the relative distances
-# NOT as effective as PowerTransformer with its far more noraml distribution
-# target_transformer = QuantileTransformer(output_distribution="normal")
-# y = target_transformer.fit_transform(y.values.reshape(-1, 1)).flatten()
-
 # Uniform, seems slightly better than QuantileTransformer with normal
 # target_transformer = QuantileTransformer(n_quantiles=10000, output_distribution="uniform", random_state=42)
 # y = target_transformer.fit_transform(y.values.reshape(-1, 1)).flatten()
@@ -117,15 +99,6 @@ print(table.to_string(index=False))  # Print the table
 # Forces the data into a normal distribution much better, but loses the relative distances. Consider comparing error in _original_ scale to truly compare?
 # target_transformer = PowerTransformer(method="yeo-johnson")
 # y = target_transformer.fit_transform(y.values.reshape(-1, 1)).flatten()
-
-# target_transformer = PowerTransformer(method="box-cox")
-# y = target_transformer.fit_transform(y.values.reshape(-1, 1)).flatten()
-
-
-# Create a pipeline that first applies log1p and then RobustScaler.
-# target_transformer = make_pipeline(FunctionTransformer(np.log1p, inverse_func=np.expm1, validate=True), RobustScaler())
-# y = target_transformer.fit_transform(y.values.reshape(-1, 1)).flatten()
-
 
 # skewness = pd.Series(y).skew()
 # print(f"Skewness: {skewness:.2f}")
@@ -330,44 +303,26 @@ max_trials = 2500  # Length of study, stored in a variable to be able to print a
 
 def get_trial_params(trial):
     params = {
-        "bagging_fraction": trial.suggest_float("bagging_fraction", 0.4, 0.9),
-        "bagging_freq": trial.suggest_int("bagging_freq", 0, 7),
-        "boosting_type": "gbdt",
-        "class_weight": trial.suggest_categorical("class_weight", [None, "balanced"]),
-        "feature_fraction": trial.suggest_float("feature_fraction", 0.3, 0.9),
+        "n_estimators": trial.suggest_int("n_estimators", 10, 90),
+        "max_depth": trial.suggest_int("max_depth", 2, 8),
+        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.99, log=True),
+        "num_leaves": trial.suggest_int("num_leaves", 2, 64),
         "lambda_l1": trial.suggest_float("lambda_l1", 1e-8, 10.0, log=True),
-        "lambda_l2": trial.suggest_float("lambda_l2", 1e-8, 100.0, log=True),
-        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
-        "max_depth": trial.suggest_int("max_depth", 3, 10),
-        "min_child_samples": trial.suggest_int("min_child_samples", 20, 100),
-        "min_child_weight": trial.suggest_float("min_child_weight", 1e-3, 1.0, log=True),
-        "min_gain_to_split": trial.suggest_float("min_gain_to_split", 1e-3, 0.5, log=True),
-        "n_estimators": trial.suggest_int("n_estimators", 50, 500),
-        "num_leaves": trial.suggest_int("num_leaves", 4, 64),
-        "objective": "multiclass",
-        "subsample_for_bin": trial.suggest_int("subsample_for_bin", 20000, 150000),
+        "lambda_l2": trial.suggest_float("lambda_l2", 1e-8, 10.0, log=True),
+        "feature_fraction": trial.suggest_float("feature_fraction", 0.1, 0.9),
+        "bagging_fraction": trial.suggest_float("bagging_fraction", 0.4, 0.95),
+        "bagging_freq": trial.suggest_int("bagging_freq", 1, 7),
+        "min_child_samples": trial.suggest_int("min_child_samples", 5, 150),
+        "min_child_weight": trial.suggest_float("min_child_weight", 1e-4, 1.0, log=True),
+        "min_gain_to_split": trial.suggest_float("min_gain_to_split", 0.0, 0.5),
+        "subsample_for_bin": trial.suggest_int("subsample_for_bin", 50000, 200000),
+        "boosting_type": "gbdt",
+        "class_weight": "balanced",
         "verbosity": -1,
+        "random_state": 42,
+        "n_jobs": -1,
     }
 
-    # LGBMClassifier, FULL search space for afterwards
-    # params = {
-    #     "verbosity": -1,
-    #     "bagging_fraction": trial.suggest_float("bagging_fraction", 0.4, 1.0),  # Alias: subsample
-    #     "bagging_freq": trial.suggest_int("bagging_freq", 0, 10),  # Alias: subsample_freq
-    #     "boosting_type": trial.suggest_categorical("boosting_type", ["gbdt", "rf"]),
-    #     "class_weight": trial.suggest_categorical("class_weight", [None, "balanced"]),  # Specific to Classifier
-    #     "feature_fraction": trial.suggest_float("feature_fraction", 0.1, 1.0),  # Alias: colsample_bytree - Decreased lower bound
-    #     "lambda_l1": trial.suggest_float("lambda_l1", 1e-8, 10.0, log=True),  # Alias: reg_alpha
-    #     "lambda_l2": trial.suggest_float("lambda_l2", 1e-8, 100.0, log=True),  # Alias: reg_lambda - Increased upper bound
-    #     "learning_rate": trial.suggest_float("learning_rate", 1e-4, 0.3, log=True),
-    #     "max_depth": trial.suggest_int("max_depth", 3, 20),
-    #     "min_child_samples": trial.suggest_int("min_child_samples", 1, 100),  # Decreased lower bound
-    #     "min_child_weight": trial.suggest_float("min_child_weight", 1e-5, 10.0, log=True),  # Added based on Regressor params
-    #     "min_gain_to_split": trial.suggest_float("min_gain_to_split", 1e-8, 1.0, log=True),  # Added based on Regressor params (alias: min_split_gain)
-    #     "n_estimators": trial.suggest_int("n_estimators", 50, 3000),
-    #     "num_leaves": trial.suggest_int("num_leaves", 2, 256),
-    #     "subsample_for_bin": trial.suggest_int("subsample_for_bin", 20000, 300000),
-    # }
     return params
 
 
@@ -377,26 +332,10 @@ def get_first_trial_params(trial):
     E.g. to "resume" from a best known setup.
     Simple return get_trial_params() if you want to use the default params.
     """
-    # return get_trial_params(trial)
-    starting_trial_params = {
-        "bagging_fraction": 0.8243982460922371,
-        "bagging_freq": 1,
-        "boosting_type": "gbdt",
-        "class_weight": "balanced",
-        "feature_fraction": 0.5071762634392396,
-        "lambda_l1": 0.07291150498780326,
-        "lambda_l2": 3.1114924911217766e-07,
-        "learning_rate": 0.09817278409944286,
-        "max_depth": 10,
-        "min_child_samples": 79,
-        "min_child_weight": 0.8506250802309826,
-        "min_gain_to_split": 0.0021260826590470336,
-        "n_estimators": 488,
-        "num_leaves": 57,
-        "subsample_for_bin": 134204,
-        "verbosity": -1,
-    }
-    return starting_trial_params
+    return get_trial_params(trial)
+    # starting_trial_params = {
+    # }
+    # return starting_trial_params
 
 
 # Switch from CatBoostRegressor to CatBoostClassifier
