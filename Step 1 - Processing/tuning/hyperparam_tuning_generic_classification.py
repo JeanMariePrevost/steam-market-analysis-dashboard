@@ -3,6 +3,7 @@ Same as hyperparam_tuning_generic.py, but the task is to classify games "chances
 """
 
 import sys
+import warnings
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +11,7 @@ import numpy as np
 import optuna
 import pandas as pd
 from catboost import CatBoostClassifier
+from lightgbm import LGBMClassifier
 from sklearn.metrics import classification_report, cohen_kappa_score, make_scorer
 from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.preprocessing import QuantileTransformer
@@ -71,9 +73,8 @@ y = data["steam_total_reviews"]  # Extract the target
 
 # Since this is a classification task, we need to convert the target to a categorical variable
 # First, we define the bins cuttoffs for the target variable
-# bins = [-np.inf, 49, 999, np.inf]  # Limited to 3 bins for testing
-bins = [-np.inf, 49, 299, 999, 9999, np.inf]  # Moderate set of 5 bins
-# bins = [-np.inf, 49, 99, 299, 999, 2499, 9999, 19999, np.inf] # Full set of bins
+# bins = [-np.inf, 50, 300, 1000, 2500, 10000, np.inf]
+bins = [-np.inf, 50, 100, 250, 500, 1000, 2500, 5000, np.inf]
 labels = range(len(bins) - 1)  # Create labels for the bins, e.g. [0, 1, 2, ...]
 y_binned = pd.cut(y, bins=bins, labels=labels)
 y = pd.Series(y_binned, name="steam_total_reviews")  # Convert the binned target variable to a Series
@@ -174,7 +175,17 @@ last_improvement_amount = 0.0
 
 def objective(trial):
     # Get the hyperparameters for this trial.
-    params = get_trial_params(trial)
+    if trial.number == 0:
+        # If this is the first trial, use the starting trial params
+        try:
+            params = get_first_trial_params(trial)
+        except Exception as e:
+            print(f"Error getting first trial params: {e}")
+            print("Using default params instead.")
+            params = get_trial_params(trial)
+    else:
+        # Otherwise, use the regular params
+        params = get_trial_params(trial)
 
     GREEN = "\033[92m"
     CYAN = "\033[96m"
@@ -319,22 +330,77 @@ max_trials = 2500  # Length of study, stored in a variable to be able to print a
 
 def get_trial_params(trial):
     params = {
-        "iterations": trial.suggest_int("iterations", 20, 60),
-        "learning_rate": trial.suggest_float("learning_rate", 0.15, 0.25),
-        "depth": trial.suggest_int("depth", 5, 8),
-        "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1e-3, 1.0, log=True),
-        "loss_function": "MultiClass",  # Switch from RMSE to MultiClass for classification
-        "early_stopping_rounds": trial.suggest_int("early_stopping_rounds", 3, 20),
-        # "subsample": trial.suggest_float("subsample", 0.05, 0.35),
-        "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.4, 1.0),
-        "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 25, 120),
-        # "verbose": 0,
+        "bagging_fraction": trial.suggest_float("bagging_fraction", 0.4, 0.9),
+        "bagging_freq": trial.suggest_int("bagging_freq", 0, 7),
+        "boosting_type": "gbdt",
+        "class_weight": trial.suggest_categorical("class_weight", [None, "balanced"]),
+        "feature_fraction": trial.suggest_float("feature_fraction", 0.3, 0.9),
+        "lambda_l1": trial.suggest_float("lambda_l1", 1e-8, 10.0, log=True),
+        "lambda_l2": trial.suggest_float("lambda_l2", 1e-8, 100.0, log=True),
+        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+        "max_depth": trial.suggest_int("max_depth", 3, 10),
+        "min_child_samples": trial.suggest_int("min_child_samples", 20, 100),
+        "min_child_weight": trial.suggest_float("min_child_weight", 1e-3, 1.0, log=True),
+        "min_gain_to_split": trial.suggest_float("min_gain_to_split", 1e-3, 0.5, log=True),
+        "n_estimators": trial.suggest_int("n_estimators", 50, 500),
+        "num_leaves": trial.suggest_int("num_leaves", 4, 64),
+        "objective": "multiclass",
+        "subsample_for_bin": trial.suggest_int("subsample_for_bin", 20000, 150000),
+        "verbosity": -1,
     }
+
+    # LGBMClassifier, FULL search space for afterwards
+    # params = {
+    #     "verbosity": -1,
+    #     "bagging_fraction": trial.suggest_float("bagging_fraction", 0.4, 1.0),  # Alias: subsample
+    #     "bagging_freq": trial.suggest_int("bagging_freq", 0, 10),  # Alias: subsample_freq
+    #     "boosting_type": trial.suggest_categorical("boosting_type", ["gbdt", "rf"]),
+    #     "class_weight": trial.suggest_categorical("class_weight", [None, "balanced"]),  # Specific to Classifier
+    #     "feature_fraction": trial.suggest_float("feature_fraction", 0.1, 1.0),  # Alias: colsample_bytree - Decreased lower bound
+    #     "lambda_l1": trial.suggest_float("lambda_l1", 1e-8, 10.0, log=True),  # Alias: reg_alpha
+    #     "lambda_l2": trial.suggest_float("lambda_l2", 1e-8, 100.0, log=True),  # Alias: reg_lambda - Increased upper bound
+    #     "learning_rate": trial.suggest_float("learning_rate", 1e-4, 0.3, log=True),
+    #     "max_depth": trial.suggest_int("max_depth", 3, 20),
+    #     "min_child_samples": trial.suggest_int("min_child_samples", 1, 100),  # Decreased lower bound
+    #     "min_child_weight": trial.suggest_float("min_child_weight", 1e-5, 10.0, log=True),  # Added based on Regressor params
+    #     "min_gain_to_split": trial.suggest_float("min_gain_to_split", 1e-8, 1.0, log=True),  # Added based on Regressor params (alias: min_split_gain)
+    #     "n_estimators": trial.suggest_int("n_estimators", 50, 3000),
+    #     "num_leaves": trial.suggest_int("num_leaves", 2, 256),
+    #     "subsample_for_bin": trial.suggest_int("subsample_for_bin", 20000, 300000),
+    # }
     return params
 
 
+def get_first_trial_params(trial):
+    """
+    Here you can define a "starting trial" to be used for the study.
+    E.g. to "resume" from a best known setup.
+    Simple return get_trial_params() if you want to use the default params.
+    """
+    # return get_trial_params(trial)
+    starting_trial_params = {
+        "bagging_fraction": 0.8243982460922371,
+        "bagging_freq": 1,
+        "boosting_type": "gbdt",
+        "class_weight": "balanced",
+        "feature_fraction": 0.5071762634392396,
+        "lambda_l1": 0.07291150498780326,
+        "lambda_l2": 3.1114924911217766e-07,
+        "learning_rate": 0.09817278409944286,
+        "max_depth": 10,
+        "min_child_samples": 79,
+        "min_child_weight": 0.8506250802309826,
+        "min_gain_to_split": 0.0021260826590470336,
+        "n_estimators": 488,
+        "num_leaves": 57,
+        "subsample_for_bin": 134204,
+        "verbosity": -1,
+    }
+    return starting_trial_params
+
+
 # Switch from CatBoostRegressor to CatBoostClassifier
-model_class = CatBoostClassifier
+model_class = LGBMClassifier
 
 
 # Set Optuna verbosity to WARNING, I use my own print_progress_callback to print the results
@@ -373,7 +439,8 @@ def show_best_results():
     # Print the 10 best results
     print("\nTop 10 best results:")
     for i, (params, results) in enumerate(list(trials_results_sorted.items())[:10]):
-        print(f"Adjusted Acc: {results['trial_score']:.4f}, Mean Acc: {results['mean_accuracy']:.4f}, Time to train: {results['time_to_train'].total_seconds():.2f}s, Params: {params}")
+        print(f"Score: {results['trial_score']:.4f}, Time to train: {results['time_to_train'].total_seconds():.2f}s, Params: {params}")
+        # print(f"Adjusted Acc: {results['trial_score']:.4f}, Mean Acc: {results['mean_accuracy']:.4f}, Time to train: {results['time_to_train'].total_seconds():.2f}s, Params: {params}")
 
     input("Press Enter to return to main menu...")
 
