@@ -164,6 +164,20 @@ with st.spinner("Running inference...", show_time=True):
     st.write(f"Blended Prediction: {blended_prediction}")
 
 
+# Debug, test inference times individually
+import time
+
+before = time.time()
+time_lgmb_high_preds = model_lgbm_high.predict_proba(input_element)
+print(f"Time taken for {MODEL_NAME_LGBM_HIGH}: {time.time() - before} seconds")
+before = time.time()
+time_lgmb_low_preds = model_lgbm_low.predict_proba(input_element)
+print(f"Time taken for {MODEL_NAME_LGBM_LOW}: {time.time() - before} seconds")
+before = time.time()
+time_xgb_preds = model_xgb.predict_proba(input_element)
+print(f"Time taken for {MODEL_NAME_XGB}: {time.time() - before} seconds")
+
+
 import math
 
 
@@ -249,3 +263,152 @@ with st.spinner("Creating bar chart...", show_time=True):
 
     # Display in Streamlit
     st.pyplot(fig)
+
+
+# Debug, scoring all potential changes to baseline
+baseline_score = 0
+for i, prob in enumerate(blended_prediction.flatten()):
+    baseline_score += prob * i
+print(f"Baseline score: {baseline_score}")
+scores = {}
+
+for feature, value in features.items():
+    score_label = f"{feature}_to_{value}"
+    if scores.get(score_label) is not None:
+        print(f"Test '{score_label}' already scored, skipping.")
+        continue
+    if input_element[feature][0] != value:
+        print(f"Running test for {score_label}...")
+        # Create a copy of the input element to modify
+        modified_element = input_element.copy()
+        modified_element.loc[0, feature] = value
+
+        # Run inference on the modified element
+        lgbm_high_preds = model_lgbm_high.predict_proba(modified_element)
+        lgbm_low_preds = model_lgbm_low.predict_proba(modified_element)
+        xgb_preds = model_xgb.predict_proba(modified_element)
+
+        # Calculate the blended prediction
+        blended_prediction = (lgbm_high_preds + lgbm_low_preds + xgb_preds) / 3
+
+        # Normalize the blended prediction to ensure it sums to 1
+        blended_prediction /= np.sum(blended_prediction)
+
+        # Store the score for this feature change by multiplying the probabilities by their index, as this is ordinal
+        score = 0
+        for i, prob in enumerate(blended_prediction.flatten()):
+            score += prob * i
+        # Store the score in the dictionary
+        score -= baseline_score
+        score = round(score, 6)
+        scores[score_label] = score
+        print(f"Test: {score_label}, Score: {score}")
+    else:
+        print(f"Test '{score_label}' is unchanged, skipping.")
+
+# Same for flipping the binary features
+for feature, value in input_element.iloc[0].items():
+    if not feature.startswith("~"):
+        continue
+    # flip the feature from user input
+    value = 1 if value == 0 else 0
+    score_label = f"{feature}_to_{value}"
+    if scores.get(score_label) is not None:
+        print(f"Test '{score_label}' already scored, skipping.")
+        continue
+
+    print(f"Running inference for flipping the feature '{feature}' to {value}...")
+    # Create a copy of the input element to modify
+    modified_element = input_element.copy()
+    modified_element.loc[0, feature] = 1 if modified_element[feature][0] == 0 else 0
+
+    # Run inference on the modified element
+    lgbm_high_preds = model_lgbm_high.predict_proba(modified_element)
+    lgbm_low_preds = model_lgbm_low.predict_proba(modified_element)
+    xgb_preds = model_xgb.predict_proba(modified_element)
+
+    # Calculate the blended prediction
+    blended_prediction = (lgbm_high_preds + lgbm_low_preds + xgb_preds) / 3
+
+    # Normalize the blended prediction to ensure it sums to 1
+    blended_prediction /= np.sum(blended_prediction)
+
+    # Store the score for this feature change by multiplying the probabilities by their index, as this is ordinal
+    score = 0
+    for i, prob in enumerate(blended_prediction.flatten()):
+        score += prob * i
+    # Store the score in the dictionary
+    score -= baseline_score
+    score = round(score, 6)
+    scores[score_label] = score
+    print(f"Test: {score_label}, Score: {score}")
+
+manual_tests = {
+    "average_time_to_beat": [0, 5, 10, 20, 50, 100],
+    "categories_count": [0, 1, 2, 3, 4, 5, 10, 15, 20],
+    "controller_support": [-1, 0, 1],
+    "early_access": [-1, 0, 1],
+    "gamefaqs_difficulty_rating": [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8],
+    "genres_count": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    "has_demos": [-1, 0, 1],
+    "languages_supported_count": [0, 1, 2, 3, 5, 10, 20],
+    "languages_with_full_audio_count": [0, 1, 2, 3, 5, 10, 20],
+    "monetization_model": [-1, 0, 1, 2],
+    "price_original": [0.99, 1.99, 2.99, 4.99, 9.99, 14.99, 19.99, 24.99, 29.99, 49.99, 59.99, 79.99],
+    "release_day_of_month": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31],
+    "release_month": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    "required_age": [0, 12, 13, 16, 18],
+    "runs_on_linux": [-1, 0, 1],
+    "runs_on_mac": [-1, 0, 1],
+    "runs_on_steam_deck": [-1, 0, 1],
+    "runs_on_windows": [-1, 0, 1],
+    "steam_store_movie_count": [0, 1, 2, 3, 4, 5, 10, 20],
+    "steam_store_screenshot_count": [0, 1, 2, 3, 4, 5, 10, 20, 30, 40, 50],
+    "tags_count": [0, 1, 2, 3, 4, 5, 10, 20, 30, 37],
+    "vr_only": [-1, 0, 1],
+    "vr_supported": [-1, 0, 1],
+}
+
+# Run manual tests
+for feature, values in manual_tests.items():
+    for value in values:
+        score_label = f"{feature}_to_{value}"
+        if scores.get(score_label) is not None:
+            print(f"Test '{score_label}' already scored, skipping.")
+            continue
+        if input_element[feature][0] != value:
+            print(f"Running test for {feature} to {value}...")
+            # Create a copy of the input element to modify
+            modified_element = input_element.copy()
+            modified_element.loc[0, feature] = value
+
+            # Run inference on the modified element
+            lgbm_high_preds = model_lgbm_high.predict_proba(modified_element)
+            lgbm_low_preds = model_lgbm_low.predict_proba(modified_element)
+            xgb_preds = model_xgb.predict_proba(modified_element)
+
+            # Calculate the blended prediction
+            blended_prediction = (lgbm_high_preds + lgbm_low_preds + xgb_preds) / 3
+
+            # Normalize the blended prediction to ensure it sums to 1
+            blended_prediction /= np.sum(blended_prediction)
+
+            # Store the score for this feature change by multiplying the probabilities by their index, as this is ordinal
+            score = 0
+            for i, prob in enumerate(blended_prediction.flatten()):
+                score += prob * i
+            # Store the score in the dictionary
+            score -= baseline_score
+            score = round(score, 6)
+            scores[score_label] = score
+            print(f"Feature: {feature}, Value: {value}, Score: {score}")
+        else:
+            print(f"Feature '{feature}' is unchanged, skipping.")
+
+print("Scores:")
+# Sort the scores dictionary by value in descending order
+sorted_scores = dict(sorted(scores.items(), key=lambda item: item[1], reverse=True))
+
+# Print each label + score, one per line
+for label, score in sorted_scores.items():
+    print(f"{label}: {score}")
