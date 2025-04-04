@@ -163,18 +163,65 @@ with st.spinner("Running inference...", show_time=True):
     blended_prediction = (lgbm_high_preds + lgbm_low_preds + xgb_preds) / 3
     st.write(f"Blended Prediction: {blended_prediction}")
 
+
+import math
+
+
+def calculate_estimated_owners_boxleiter(steam_total_reviews: int, release_year: int, price_original: float) -> int:
+    """
+    Calculate the estimated number of owners using Boxleiter's method for a single game input.
+    """
+
+    # Determine temporary scale factor: 1.0 by default, 0.75 if total reviews > 100000.
+    temp_scale_factor = 0.75 if steam_total_reviews > 100000 else 1.0
+
+    # Determine review inflation factor based on the release year.
+    if release_year <= 2013:
+        temp_review_inflation_factor = 79 / 80
+    elif release_year == 2014:
+        temp_review_inflation_factor = 72 / 80
+    elif release_year == 2015:
+        temp_review_inflation_factor = 62 / 80
+    elif release_year == 2016:
+        temp_review_inflation_factor = 52 / 80
+    elif release_year == 2017:
+        temp_review_inflation_factor = 43 / 80
+    elif release_year == 2018:
+        temp_review_inflation_factor = 38 / 80
+    elif release_year == 2019:
+        temp_review_inflation_factor = 36 / 80
+    elif release_year > 2020:
+        temp_review_inflation_factor = 31 / 80
+    else:
+        temp_review_inflation_factor = 1.0
+
+    boxleiter_number = 80  # Boxleiter's multiplier constant.
+    temp_commitment_bias_mult = 3 + 2 * math.exp(-0.2 * price_original) - 2  # Compute the commitment bias multiplier based on the original price.
+    estimated_owners = steam_total_reviews * boxleiter_number * temp_scale_factor * temp_review_inflation_factor * temp_commitment_bias_mult
+
+    return int(round(estimated_owners))
+
+
 # Print a nice bar chart with the blended prediction
 with st.spinner("Creating bar chart...", show_time=True):
     # Define x-axis labels
     bins = [0, 50, 100, 250, 500, 1000, 2500, 5000, np.inf]
+    bins_using_user_count = []
+    for i in range(len(bins) - 1):
+        value_as_owners = calculate_estimated_owners_boxleiter(bins[i], input_element["release_year"][0], input_element["price_original"][0])
+        nicely_rounded = utils.step_round(value_as_owners)
+        bins_using_user_count.append(nicely_rounded)
+    bins = bins_using_user_count
+    bins.append(np.inf)  # Append infinity to the last bin for open-ended range
+    print(f"Bins: {bins}")
     categories = []
     for i in range(len(bins) - 1):
         if bins[i] == 0:
-            categories.append(f"< {bins[i + 1]}")
+            categories.append(f"< {bins[i + 1]/1000:.0f}k")
         elif bins[i + 1] == np.inf:
-            categories.append(f">= {bins[i]}")
+            categories.append(f">= {bins[i]/1000:.0f}k")
         else:
-            categories.append(f"{bins[i]} - {bins[i + 1]}")
+            categories.append(f"{bins[i]/1000:.0f}k - {bins[i + 1]/1000:.0f}k")
     print(f"Categories: {categories}")
 
     # Normalize the blended prediction to ensure it sums to 1
@@ -187,7 +234,7 @@ with st.spinner("Creating bar chart...", show_time=True):
 
     # Customize the chart
     ax.set_title("Probability Distribution Across Categories", pad=20)
-    ax.set_xlabel("Estimated Number of Reviews")
+    ax.set_xlabel("Estimated Playerbase (Boxleiter, rounded)")
     ax.set_ylabel("Probability")
 
     # Rotate x-axis labels for better readability
