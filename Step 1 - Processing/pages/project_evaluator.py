@@ -28,14 +28,21 @@ st.markdown(
 # Page Title & Description
 st.title("Project Viability Estimator")
 st.write("This page provides a tool to estimate the viability of your project based on historical data from Steam.")
-st.write("Multiple machine learning models predictions are blended to achieve a more stable estimated number of steam reviews, used as a direct proxy for the number of players.")
+st.write("These are only projected estimations, and should not be used as a definitive measure of success.")
+st.info(
+    """Limitations:
+    
+Multiple machine learning models predictions are blended to achieve
+a more stable and accurate (QWK ≈ 0.7507) estimated number of ***steam reviews***,
+used as a direct ***proxy*** for the number of players.
+
+The models rely of historical data and may not predict unknown combinations of features accurately.
+"""
+)
 
 
 # Sidebar Filter: Release Year Range
-st.sidebar.title("Input")
-# min_year = int(df["release_year"].min())
-# max_year = int(df["release_year"].max())
-# selected_year_range = st.sidebar.slider("Select Release Year Range", min_year, max_year, (2007, max_year))
+st.sidebar.title("Project Details")
 
 # Multiline text are in sidebar
 st.sidebar.markdown(
@@ -48,7 +55,7 @@ st.sidebar.markdown(
     """
 )
 input_text = st.sidebar.text_area(
-    "Game Name",
+    "Features",
     placeholder="""e.g.
     average_time_to_beat=20.0
     controller_support=0
@@ -66,14 +73,16 @@ input_text = st.sidebar.text_area(
     height=450,
 )
 
+suggestion_score_cutoff = st.sidebar.number_input("Suggestion score cutoff", min_value=0.0, value=0.025, step=0.001, format="%.3f")
+
 
 # Debug
-st.write("Input:")
-st.write(input_text)
+# st.write("Input:")
+# st.write(input_text)
 
 # Extracting features from the input text
 input_lines = input_text.strip().split("\n")
-features = {}
+user_input_features = {}
 for line in input_lines:
     if "=" in line:
         feature, value = line.split("=")
@@ -81,22 +90,22 @@ for line in input_lines:
         value = value.strip()
         if feature.startswith("~"):
             if value == "1" or value == "0":
-                features[feature] = 1 if value == "1" else 0  # Convert to binary
+                user_input_features[feature] = 1 if value == "1" else 0  # Convert to binary
             else:
                 st.error(f"Value for '{feature}' must be either 0 or 1. Got: '{value}' \n\n Defaulting to baseline.")
         else:
             try:
-                features[feature] = float(value)  # Convert to float
+                user_input_features[feature] = float(value)  # Convert to float
             except ValueError:
                 st.error(f"Value for '{feature}' must be a valid number. Got: '{value}' \n\n Defaulting to baseline.")
 
 
-st.write("Extracted Features:")
-st.write(features)
+# st.write("Extracted Features:")
+# st.write(user_input_features)
 
 # Build element from baseline
 input_element = utils.load_baseline_element()
-for feature, value in features.items():
+for feature, value in user_input_features.items():
     if feature in input_element:
         input_element[feature] = value
     else:
@@ -105,8 +114,8 @@ for feature, value in features.items():
             st.warning(f"Feature '{feature}' not recognized and will be skipped. Did you mean '{closest_match}'?")
         else:
             st.warning(f"Feature '{feature}' not recognized and will be skipped. No close match found.")
-st.write("Baseline Element:")
-st.write(input_element)
+# st.write("Baseline Element:")
+# st.write(input_element)
 
 
 #######################################################################
@@ -148,20 +157,22 @@ with st.spinner("Loading models...", show_time=True):
         st.stop()
 
 
-# Run inference
+#######################################################################
+# Inference
+#######################################################################
 with st.spinner("Running inference...", show_time=True):
     lgbm_high_preds = model_lgbm_high.predict_proba(input_element)
     lgbm_low_preds = model_lgbm_low.predict_proba(input_element)
     xgb_preds = model_xgb.predict_proba(input_element)
 
-    st.write("Predictions:")
-    st.write(f"Predictions for {MODEL_NAME_LGBM_HIGH}: {lgbm_high_preds}")
-    st.write(f"Predictions for {MODEL_NAME_LGBM_LOW}: {lgbm_low_preds}")
-    st.write(f"Predictions for {MODEL_NAME_XGB}: {xgb_preds}")
+    # st.write("Predictions:")
+    # st.write(f"Predictions for {MODEL_NAME_LGBM_HIGH}: {lgbm_high_preds}")
+    # st.write(f"Predictions for {MODEL_NAME_LGBM_LOW}: {lgbm_low_preds}")
+    # st.write(f"Predictions for {MODEL_NAME_XGB}: {xgb_preds}")
 
     # Calculate the blended prediction
     blended_prediction = (lgbm_high_preds + lgbm_low_preds + xgb_preds) / 3
-    st.write(f"Blended Prediction: {blended_prediction}")
+    # st.write(f"Blended Prediction: {blended_prediction}")
 
 
 # Debug, test inference times individually
@@ -216,7 +227,9 @@ def calculate_estimated_owners_boxleiter(steam_total_reviews: int, release_year:
     return int(round(estimated_owners))
 
 
-# Print a nice bar chart with the blended prediction
+#######################################################################
+# Plotting
+#######################################################################
 with st.spinner("Creating bar chart...", show_time=True):
     # Define x-axis labels
     bins = [0, 50, 100, 250, 500, 1000, 2500, 5000, np.inf]
@@ -265,150 +278,138 @@ with st.spinner("Creating bar chart...", show_time=True):
     st.pyplot(fig)
 
 
-# Debug, scoring all potential changes to baseline
-baseline_score = 0
-for i, prob in enumerate(blended_prediction.flatten()):
-    baseline_score += prob * i
-print(f"Baseline score: {baseline_score}")
-scores = {}
+#######################################################################
+# Suggestions
+#######################################################################
 
-for feature, value in features.items():
-    score_label = f"{feature}_to_{value}"
-    if scores.get(score_label) is not None:
-        print(f"Test '{score_label}' already scored, skipping.")
-        continue
-    if input_element[feature][0] != value:
-        print(f"Running test for {score_label}...")
-        # Create a copy of the input element to modify
-        modified_element = input_element.copy()
-        modified_element.loc[0, feature] = value
 
-        # Run inference on the modified element
-        lgbm_high_preds = model_lgbm_high.predict_proba(modified_element)
-        lgbm_low_preds = model_lgbm_low.predict_proba(modified_element)
-        xgb_preds = model_xgb.predict_proba(modified_element)
-
-        # Calculate the blended prediction
-        blended_prediction = (lgbm_high_preds + lgbm_low_preds + xgb_preds) / 3
-
-        # Normalize the blended prediction to ensure it sums to 1
-        blended_prediction /= np.sum(blended_prediction)
-
-        # Store the score for this feature change by multiplying the probabilities by their index, as this is ordinal
-        score = 0
-        for i, prob in enumerate(blended_prediction.flatten()):
-            score += prob * i
-        # Store the score in the dictionary
-        score -= baseline_score
-        score = round(score, 6)
-        scores[score_label] = score
-        print(f"Test: {score_label}, Score: {score}")
-    else:
-        print(f"Test '{score_label}' is unchanged, skipping.")
-
-# Same for flipping the binary features
-for feature, value in input_element.iloc[0].items():
-    if not feature.startswith("~"):
-        continue
-    # flip the feature from user input
-    value = 1 if value == 0 else 0
-    score_label = f"{feature}_to_{value}"
-    if scores.get(score_label) is not None:
-        print(f"Test '{score_label}' already scored, skipping.")
-        continue
-
-    print(f"Running inference for flipping the feature '{feature}' to {value}...")
-    # Create a copy of the input element to modify
-    modified_element = input_element.copy()
-    modified_element.loc[0, feature] = 1 if modified_element[feature][0] == 0 else 0
-
-    # Run inference on the modified element
-    lgbm_high_preds = model_lgbm_high.predict_proba(modified_element)
-    lgbm_low_preds = model_lgbm_low.predict_proba(modified_element)
-    xgb_preds = model_xgb.predict_proba(modified_element)
-
-    # Calculate the blended prediction
-    blended_prediction = (lgbm_high_preds + lgbm_low_preds + xgb_preds) / 3
-
-    # Normalize the blended prediction to ensure it sums to 1
-    blended_prediction /= np.sum(blended_prediction)
-
-    # Store the score for this feature change by multiplying the probabilities by their index, as this is ordinal
+def get_score_for_prediction(prediction: list):
+    """Calculate an arbitrary "score" for a set of predictions."""
     score = 0
-    for i, prob in enumerate(blended_prediction.flatten()):
+    for i, prob in enumerate(prediction.flatten()):
         score += prob * i
-    # Store the score in the dictionary
-    score -= baseline_score
-    score = round(score, 6)
-    scores[score_label] = score
-    print(f"Test: {score_label}, Score: {score}")
 
-manual_tests = {
-    "average_time_to_beat": [0, 5, 10, 20, 50, 100],
-    "categories_count": [0, 1, 2, 3, 4, 5, 10, 15, 20],
-    "controller_support": [-1, 0, 1],
-    "early_access": [-1, 0, 1],
-    "gamefaqs_difficulty_rating": [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8],
-    "genres_count": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-    "has_demos": [-1, 0, 1],
-    "languages_supported_count": [0, 1, 2, 3, 5, 10, 20],
-    "languages_with_full_audio_count": [0, 1, 2, 3, 5, 10, 20],
-    "monetization_model": [-1, 0, 1, 2],
-    "price_original": [0.99, 1.99, 2.99, 4.99, 9.99, 14.99, 19.99, 24.99, 29.99, 49.99, 59.99, 79.99],
-    "release_day_of_month": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31],
-    "release_month": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-    "required_age": [0, 12, 13, 16, 18],
-    "runs_on_linux": [-1, 0, 1],
-    "runs_on_mac": [-1, 0, 1],
-    "runs_on_steam_deck": [-1, 0, 1],
-    "runs_on_windows": [-1, 0, 1],
-    "steam_store_movie_count": [0, 1, 2, 3, 4, 5, 10, 20],
-    "steam_store_screenshot_count": [0, 1, 2, 3, 4, 5, 10, 20, 30, 40, 50],
-    "tags_count": [0, 1, 2, 3, 4, 5, 10, 20, 30, 37],
-    "vr_only": [-1, 0, 1],
-    "vr_supported": [-1, 0, 1],
-}
+    return score
 
-# Run manual tests
-for feature, values in manual_tests.items():
-    for value in values:
-        score_label = f"{feature}_to_{value}"
-        if scores.get(score_label) is not None:
-            print(f"Test '{score_label}' already scored, skipping.")
-            continue
-        if input_element[feature][0] != value:
-            print(f"Running test for {feature} to {value}...")
-            # Create a copy of the input element to modify
-            modified_element = input_element.copy()
-            modified_element.loc[0, feature] = value
 
-            # Run inference on the modified element
-            lgbm_high_preds = model_lgbm_high.predict_proba(modified_element)
-            lgbm_low_preds = model_lgbm_low.predict_proba(modified_element)
-            xgb_preds = model_xgb.predict_proba(modified_element)
+with st.status("Evaluating suggestions...") as status:
 
-            # Calculate the blended prediction
-            blended_prediction = (lgbm_high_preds + lgbm_low_preds + xgb_preds) / 3
+    scores = {}
 
-            # Normalize the blended prediction to ensure it sums to 1
-            blended_prediction /= np.sum(blended_prediction)
-
-            # Store the score for this feature change by multiplying the probabilities by their index, as this is ordinal
-            score = 0
-            for i, prob in enumerate(blended_prediction.flatten()):
-                score += prob * i
-            # Store the score in the dictionary
-            score -= baseline_score
-            score = round(score, 6)
-            scores[score_label] = score
-            print(f"Feature: {feature}, Value: {value}, Score: {score}")
+    def evaluate_feature_change_score(feature_name, value):
+        """Test a specific change by modifying the input element and running inference to identify the most impactful changes."""
+        test_name = f"{feature_name}_to_{value}"
+        if scores.get(test_name) is not None:
+            return scores[test_name]  # If the test has already been run, return the score
         else:
-            print(f"Feature '{feature}' is unchanged, skipping.")
+            # print(f"Running test for {test_name}...")
+            modified_element = input_element.copy()  # Create a copy of the input element to modify
+            modified_element.loc[0, feature_name] = value  # Modify it for the test
+
+            # Get predictions
+            preds = []
+            preds.append(model_lgbm_high.predict_proba(modified_element))
+            preds.append(model_lgbm_low.predict_proba(modified_element))
+            # preds.append(model_xgb.predict_proba(modified_element)) # XGBoost is like 25x slower, so maybe don't use it here
+
+            blended_prediction = np.mean(preds, axis=0)
+            blended_prediction /= np.sum(blended_prediction)  # Normalize the blended prediction to ensure it sums to 1
+
+            return get_score_for_prediction(blended_prediction.flatten())
+
+    tests_queue = []  # Stores tests to run as tuples (feature, value)
+
+    # First, test "removing" user-input features by setting them to baseline values
+    baseline_element = utils.load_baseline_element()
+    for feature, value in user_input_features.items():
+        # If the feature's value is not the baseline, test it
+        if feature in baseline_element and input_element[feature][0] != value:
+            tests_queue.append((feature, baseline_element[feature][0]))
+
+    # Test flipping every feature that starts with "~" (i.e., binary features)
+    for feature, value in input_element.iloc[0].items():
+        if feature.startswith("~"):
+            # flip the feature from user input
+            value = 1 if value == 0 else 0
+            tests_queue.append((feature, value))
+
+    hard_coded_tests = {
+        "average_time_to_beat": [0, 5, 10, 20, 50, 100],
+        "categories_count": [0, 1, 2, 3, 4, 5, 10, 15, 20],
+        "controller_support": [-1, 0, 1],
+        "early_access": [-1, 0, 1],
+        "gamefaqs_difficulty_rating": [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8],
+        "genres_count": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        "has_demos": [-1, 0, 1],
+        "languages_supported_count": [0, 1, 2, 3, 5, 10, 20],
+        "languages_with_full_audio_count": [0, 1, 2, 3, 5, 10, 20],
+        "monetization_model": [-1, 0, 1, 2],
+        "price_original": [0.99, 1.99, 2.99, 4.99, 9.99, 14.99, 19.99, 24.99, 29.99, 49.99, 59.99, 79.99],
+        "release_day_of_month": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31],
+        "release_month": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        "required_age": [0, 12, 13, 16, 18],
+        "runs_on_linux": [-1, 0, 1],
+        "runs_on_mac": [-1, 0, 1],
+        "runs_on_steam_deck": [-1, 0, 1],
+        "runs_on_windows": [-1, 0, 1],
+        "steam_store_movie_count": [0, 1, 2, 3, 4, 5, 10, 20],
+        "steam_store_screenshot_count": [0, 1, 2, 3, 4, 5, 10, 20, 30, 40, 50],
+        "tags_count": [0, 1, 2, 3, 4, 5, 10, 20, 30, 37],
+        "vr_only": [-1, 0, 1],
+        "vr_supported": [-1, 0, 1],
+    }
+
+    # Add hard-coded tests
+    for feature, values in hard_coded_tests.items():
+        for value in values:
+            tests_queue.append((feature, value))
+
+    # Debug - Keep only the first 50 test to speed testing
+    # tests_queue = tests_queue[:50]
+
+    # Run all tests in the queue
+    count = 0
+    for feature, value in tests_queue:
+        count += 1
+        status.update(label=f"Analyzing possible suggestion {count}/{len(tests_queue)}...")
+        score = evaluate_feature_change_score(feature, value)
+        scores[f"{feature}_to_{value}"] = score
+
+    # Get a baseline score using the exact same estimators, by passing a feature and its value in the input element as is
+    user_input_baseline_score = evaluate_feature_change_score("average_time_to_beat", input_element["average_time_to_beat"][0])
+    print(f"Baseline score: {user_input_baseline_score}")
+
+    # Make scores relative to the baseline score
+    for score in scores:
+        scores[score] = scores[score] - user_input_baseline_score
 
 print("Scores:")
 # Sort the scores dictionary by value in descending order
 sorted_scores = dict(sorted(scores.items(), key=lambda item: item[1], reverse=True))
 
-# Print each label + score, one per line
+# Debug - Print each label + score, one per line
 for label, score in sorted_scores.items():
     print(f"{label}: {score}")
+
+
+# Display the top N suggestions
+suggestions_to_show = 9999
+st.write("### Suggestions")
+st.write("This table displays the changes most likely to impact the estimated playerbase.")
+st.write("The higher the score, the stronger the predicted impact.")
+
+# Build a simple dataframe to display the suggestions
+suggestions_df = pd.DataFrame(sorted_scores.items(), columns=["Feature Change", "Score"])
+
+# Filter out suggestions with absolute score below the cutoff
+count_before_filter = len(suggestions_df)
+suggestions_df = suggestions_df[suggestions_df["Score"].abs() > suggestion_score_cutoff]
+suggestions_df = suggestions_df.sort_values(by="Score", ascending=False)
+st.write(f"Showing {len(suggestions_df)} suggestions ({count_before_filter - len(suggestions_df)} hidden for scoring below the cutoff)")
+
+suggestions_df["Score"] = suggestions_df["Score"].apply(lambda x: f"{x:.3f}")
+suggestions_df["Feature Change"] = suggestions_df["Feature Change"].apply(lambda x: x.replace("_to_", " = "))
+# suggestions_df["Feature Change"] = suggestions_df["Feature Change"].apply(lambda x: x.replace("_", " "))
+
+
+st.dataframe(suggestions_df.head(suggestions_to_show), use_container_width=True, hide_index=True)
