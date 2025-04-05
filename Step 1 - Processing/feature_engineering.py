@@ -368,7 +368,7 @@ prefix_for_sorting = "~"  # Prefix used to sort the one-hot encoded columns to t
 
 # Define the columns to explode
 columns_to_explode = {
-    "categories": prefix_for_sorting + "categroy_",
+    "categories": prefix_for_sorting + "category_",
     "genres": prefix_for_sorting + "genre_",
     "languages_supported": prefix_for_sorting + "lang_",
     "languages_with_full_audio": prefix_for_sorting + "lang_audio_",
