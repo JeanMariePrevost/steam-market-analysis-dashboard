@@ -2,14 +2,11 @@ import os
 
 import joblib
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 import streamlit as st
-from matplotlib.ticker import AutoMinorLocator
 
 import utils
-from utils import load_main_dataset
 
 # Page configuration & custom CSS
 st.set_page_config(page_title="Overview of Releases & Trends")
@@ -260,7 +257,7 @@ with st.spinner("Creating bar chart...", show_time=True):
     ax.bar(categories, probabilities, color="skyblue")
 
     # Customize the chart
-    ax.set_title("Probability Distribution Across Categories", pad=20)
+    ax.set_title("Estimated Probabilities of Playerbase Size", pad=20)
     ax.set_xlabel("Estimated Playerbase (Boxleiter, rounded)")
     ax.set_ylabel("Probability")
 
@@ -396,7 +393,7 @@ for label, score in sorted_scores.items():
 suggestions_to_show = 9999
 st.write("### Suggestions")
 st.write("This table displays the changes most likely to impact the estimated playerbase.")
-st.write("The higher the score, the stronger the predicted impact.")
+st.write("The higher the score, the stronger the predicted positive impact.")
 
 # Build a simple dataframe to display the suggestions
 suggestions_df = pd.DataFrame(sorted_scores.items(), columns=["Feature Change", "Score"])
