@@ -1,9 +1,4 @@
-"""
-This script allows you to optimize any model that taks in nothing but a set of hyperparameters and returns a score.
-It uses Optuna to optimize the hyperparameters.
-It does not support models that require custom logic beyond a search space and model type.
-"""
-
+import random
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -14,8 +9,9 @@ import pandas as pd
 from catboost import CatBoostRegressor
 from lightgbm import LGBMRegressor
 from optuna.trial import TrialState
-from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
-from sklearn.linear_model import ElasticNet
+from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, StackingRegressor
+from sklearn.linear_model import ElasticNet, Ridge
+from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
@@ -658,8 +654,9 @@ columns_to_drop = [
 
 # For slower models or initial exploration, consider using only a small subsample of the data
 # Even 0.05 seems to be enough to get a good idea of the model's performance
-fraction = 0.05  # Fraction of the data to use for training
+fraction = 1.0  # Fraction of the data to use for training
 if fraction <= 0.1:
+    print("\033[91m\n" + f"WARNING:\nUsing a very small fraction ({fraction}) of the dataset \nfor faster training; training data will exclude outliers and may not generalize well.\n\033[0m")
     # Very small sample, filter out the outliers, very weakly at the top, heavily at the bottom
     data = data[data["steam_total_reviews"] > 1]  # Remove games with 0-1 reviews
     top_games_to_remove = 25
@@ -669,367 +666,300 @@ if fraction <= 0.1:
 y = data["steam_total_reviews"]  # Extract the target
 X = data.drop(columns=columns_to_drop, errors="ignore")  # Extract the predictors, dropping the irrelevant columns and the target
 
+# seed = 42  # Set a random state for reproducibility
+seed = random.randint(0, 1000)  # Or uncomment this to use a random seed
+print(f"Random seed: {seed}")
+
 if fraction < 1.0:
-    X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.2, random_state=42)
-    X_train = X_train.sample(frac=fraction, random_state=42)
-    X_valid = X_valid.sample(frac=fraction, random_state=42)
+    X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.2, random_state=seed)
+    X_train = X_train.sample(frac=fraction, random_state=seed)
+    X_valid = X_valid.sample(frac=fraction, random_state=seed)
     y_train = y_train.loc[X_train.index]
     y_valid = y_valid.loc[X_valid.index]
     # Print a warning banner in red
     print("\033[91m\n" + f"WARNING:\nUsing only {fraction} of the dataset \nfor faster training; results may not generalize fully.\n\033[0m")
     print(f"Number of rows in the sample: {len(X_train)}")
 else:
-    X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.2, random_state=seed)
 
 # Scale the target variable
 scaler = StandardScaler()
 y_train = scaler.fit_transform(y_train.values.reshape(-1, 1)).flatten()
 y_valid = scaler.transform(y_valid.values.reshape(-1, 1)).flatten()
 
-# Dict to store trials results by params
-trials_results = {}
-latest_trial_results = None
-latest_trial_params = None
-last_start_time = None
-times_to_train = []
-trials_since_last_improvement = 0
-last_improvement_amount = 0.0
+
+# Define base models with your tuned hyperparameters
+mlp_reg = MLPRegressor(
+    solver="adam",
+    hidden_layer_sizes=(216, 162),
+    activation="relu",
+    alpha=0.02841699292881125,
+    batch_size=136,
+    learning_rate="adaptive",
+    learning_rate_init=0.005974385093746269,
+    max_iter=50,
+    shuffle=True,
+    tol=1.3074343950880321e-07,
+    verbose=True,
+    warm_start=False,
+    beta_1=0.8107951547310408,
+    beta_2=0.8989192729472247,
+    epsilon=1.0242032157822251e-07,
+    early_stopping=False,
+    n_iter_no_change=39,
+)
+
+extra_trees = ExtraTreesRegressor(
+    n_estimators=467,
+    criterion="friedman_mse",
+    max_depth=34,
+    min_samples_split=69,
+    max_features=0.25392231481556493,
+    min_impurity_decrease=4.9985173365604005,
+    bootstrap=False,
+    ccp_alpha=7.84125187827584e-05,
+)
+
+dt_regressor = DecisionTreeRegressor(
+    criterion="friedman_mse",
+    splitter="best",
+    max_depth=46,
+    min_samples_split=51,
+    min_samples_leaf=75,
+    max_features=0.9587016970482302,
+    min_impurity_decrease=2.5864712856205774,
+    ccp_alpha=6.23553680715953e-05,
+)
+
+elastic_net = ElasticNet(
+    alpha=0.060894035886975076,
+    l1_ratio=0.7560695882925308,
+)
+
+rf_regressor = RandomForestRegressor(
+    ccp_alpha=0.000151,
+    criterion="friedman_mse",
+    max_depth=11,
+    max_features=0.3,
+    max_samples=0.855,
+)
 
 
-#################################################################
-# Functions
-#################################################################
-def objective(trial):
-    params = get_trial_params(trial)
+xgb_regressor_pruned = XGBRegressor(
+    colsample_bytree=0.4799,
+    eval_metric="rmsle",
+    # feature_selector="greedy",
+    gamma=1.826,
+    grow_policy="lossguide",
+    learning_rate=0.024960677618899953,
+    max_delta_step=9,
+    max_depth=9,
+    max_leaves=112,
+    min_child_weight=6,
+    n_estimators=165,
+    num_parallel_tree=10,
+    reg_alpha=2.5,
+    reg_lambda=0.02,
+    subsample=0.8155,
+    tree_method="approx",
+    # top_k=32,
+)
 
-    GREEN = "\033[92m"
-    CYAN = "\033[96m"
-    BOLD = "\033[1m"
-    RESET = "\033[0m"
-
-    print(f"\n{BOLD}{GREEN}Starting trial {trial.number} of {max_trials}{RESET} with params: {params}")
-    print(f"You can safely interrupt at any point with {CYAN}Ctrl+C{RESET} and get the best results so far.")
-
-    # Get current time to measure how long the training takes
-    global last_start_time
-    last_start_time = datetime.now()
-
-    # Instantiate the CatBoostRegressor with the suggested hyperparameters
-    model = model_class(**params, **fixed_params)
-
-    # Evaluate the model using cross-validation
-    scores = cross_val_score(model, X_train, y_train, cv=5, scoring="r2", n_jobs=-1)
-
-    # Calculate an "adjusted R²" to penalize models with high standard deviation (meaning they are not stable)
-    # This is a simple way to penalize models that might have benefitted from randomness
-    mean_r2 = np.mean(scores)
-    std_r2 = np.std(scores)
-    # Penalize high variance
-    variance_penalty = 0.1 * std_r2
-    adjusted_r2 = mean_r2 - variance_penalty  # This will be the "score" as far as Optuna is concerned
-
-    global times_to_train
-    times_to_train.append(datetime.now() - last_start_time)
-
-    # Create a key from the params to store the results
-    key = str(params)
-    trials_results[key] = {
-        "mean_r2": mean_r2,
-        "std_r2": std_r2,
-        "variance_penalty": variance_penalty,
-        "adjusted_r2": adjusted_r2,
-        "trial_number": trial.number,
-        "time_to_train": times_to_train[-1],
-        "trial_object": trial,
-    }
-
-    global latest_trial_results
-    latest_trial_results = trials_results[key]
-
-    global latest_trial_params
-    latest_trial_params = params
-
-    return adjusted_r2
+xgb_regressor_limited = XGBRegressor(
+    colsample_bytree=0.25968154894274487,
+    eval_metric="rmsle",
+    # feature_selector="greedy",
+    gamma=0.1855174849750825,
+    grow_policy="lossguide",
+    learning_rate=0.8267257948740029,
+    max_delta_step=1,
+    max_depth=6,
+    max_leaves=13,
+    min_child_weight=6,
+    n_estimators=38,
+    num_parallel_tree=21,
+    reg_alpha=18.940284499594384,
+    reg_lambda=2.2458027527360963e-05,
+    subsample=0.9873311844726601,
+    tree_method="hist",
+)
 
 
-def print_progress_callback(study, trial):
-    # Sort the results by adjusted R²
-    trials_results_sorted = {k: v for k, v in sorted(trials_results.items(), key=lambda item: item[1]["adjusted_r2"], reverse=True)}
-    best_trial_results = list(trials_results_sorted.values())[0]
-
-    # ANSI color codes
-    GREEN = "\033[92m"
-    CYAN = "\033[96m"
-    YELLOW = "\033[93m"
-    GRAY = "\033[90m"
-    BOLD = "\033[1m"
-    RESET = "\033[0m"
-
-    is_new_best = latest_trial_results["adjusted_r2"] == best_trial_results["adjusted_r2"]
-    best_adjusted_r2_tag = f"{BOLD}{GREEN}(NEW BEST){RESET}"
-
-    global trials_since_last_improvement
-    if not is_new_best:
-        best_adjusted_r2_tag = f"{GRAY}(best: {best_trial_results['adjusted_r2']:.4f}){RESET}"
-        trials_since_last_improvement += 1
-    else:
-        trials_since_last_improvement = 0
-        if trial.number > 1:
-            previous_best = list(trials_results_sorted.values())[1]["adjusted_r2"]
-        else:
-            previous_best = 0.0
-        global last_improvement_amount
-        last_improvement_amount = latest_trial_results["adjusted_r2"] - previous_best
-
-    duration = (datetime.now() - last_start_time).total_seconds()
-    median_duration = np.median([t.total_seconds() for t in times_to_train])
-    median_penalty = np.median([r["variance_penalty"] for r in trials_results_sorted.values()])
-    estimated_seconds_remaining = (max_trials - trial.number) * median_duration
-
-    hours = int(estimated_seconds_remaining // 3600)
-    minutes = int((estimated_seconds_remaining % 3600) // 60)
-    formatted_time = f"{hours}h {minutes}m"
-
-    print(
-        f"\n{BOLD}{CYAN}=== Trial {trial.number} of {max_trials} ({model_class.__name__}) ==={RESET}\n"
-        f"{YELLOW}  {'Adjusted R²:':20} {latest_trial_results['adjusted_r2']:> 8.4f}   {best_adjusted_r2_tag}\n"
-        f"{YELLOW}  {'Mean Raw R²:':20} {latest_trial_results['mean_r2']:> 8.4f}   {GRAY}(best: {best_trial_results['mean_r2']:.4f}){RESET}\n"
-        f"{YELLOW}  {'Variance Penalty:':20} {latest_trial_results['variance_penalty']:> 8.4f}   {GRAY}(median: {median_penalty:.4f}){RESET}\n"
-        f"{YELLOW}  {'Time to train:':20} {duration:> 7.2f}s   {GRAY}(median: {median_duration:.2f}s){RESET} "
-        f"{GRAY}  ({'Estimated time remaining:':20} {estimated_seconds_remaining:.2f}s, or {formatted_time}){RESET}\n"
-    )
-
-    # Printing progress info like "what and when was the last improvement"
-    DIM_GREEN = "\033[2;32m"  # Dim Green
-    DIM_CYAN = "\033[2;36m"  # Dim Cyan
-    DIM_ORANGE = "\033[2;38;5;208m"  # Dim Orange (using 256-color code 208)
-    DIM_RED = "\033[2;31m"  # Dim Red
-    RESET = "\033[0m"  # Resets all attributes
-    if trials_since_last_improvement < 30:
-        print(f"{DIM_GREEN}Last improvement: +{last_improvement_amount:.4f} ({trials_since_last_improvement} trials ago){RESET}")
-    elif trials_since_last_improvement < 75:
-        print(f"{DIM_CYAN}Last improvement: +{last_improvement_amount:.4f} ({trials_since_last_improvement} trials ago){RESET}")
-    elif trials_since_last_improvement < 150:
-        print(f"{DIM_ORANGE}Last improvement: +{last_improvement_amount:.4f} ({trials_since_last_improvement} trials ago, consider adjusting the search space?){RESET}")
-    else:  # count >= 100
-        print(f"{DIM_RED}Last improvement: +{last_improvement_amount:.4f} ({trials_since_last_improvement} trials ago, probably stuck, adjust the search space){RESET}")
-
-    # Append latest results to a file, using the model as part of the name
-    global latest_trial_params
-    full_latest_result_log_string = (
-        f"Score: {latest_trial_results['adjusted_r2']:.4f}, Mean R²: {latest_trial_results['mean_r2']:.4f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
-    )
-    full_best_result_log_string = f"Score: {best_trial_results['adjusted_r2']:.4f}, Mean R²: {best_trial_results['mean_r2']:.4f}, Time to train: {duration:.2f}s, Params: {str(latest_trial_params)}\n"
-
-    model_name = model_class.__name__
-    with open(f"tuning_results_{model_name}.txt", "a", encoding="utf-8") as f:
-        f.write(full_latest_result_log_string)
-
-    print(f"{GREEN}Best so far:{RESET} {full_best_result_log_string}")
-    print("-" * 60)
+lgbm_regressor = LGBMRegressor(
+    boosting_type="gbdt",
+    colsample_bytree=0.2970113752542446,
+    importance_type="gain",
+    learning_rate=0.019064828567768227,
+    max_depth=13,
+    min_child_samples=2,
+    min_child_weight=0.08,
+    min_split_gain=0.0013416702983401459,
+    n_estimators=833,
+    num_leaves=114,
+    reg_alpha=0.0020191308023190433,
+    reg_lambda=29.692567967373314,
+    subsample=0.5931035850505068,
+    subsample_for_bin=22518,
+    subsample_freq=4,
+    verbosity=-1,
+)
 
 
-#################################################################
-# Study
-#################################################################
-max_trials = 2500  # Length of study, stored in a variable to be able to print as we progress
-
-
-def get_trial_params(trial):
-    params = {}
-
-    # Solver selection remains exploratory.
-    params["solver"] = "adam"
-
-    # # Network architecture
-    n_layers = trial.suggest_int("n_layers", 2, 3)
-    layer1_units = trial.suggest_int("layer1_units", 32, 256)
-    layer2_units = trial.suggest_int("layer2_units", 8, layer1_units)  # Layer 2 must be less than or equal to layer 1
-
-    # For a three-layer network, enforce that the third layer is at most "K" and not more than layer2_units.
-    if n_layers == 3:
-        layer3_units_high = min(16, layer2_units)  # Layer 3 must be less than or equal to layer 2 and has a maximum
-        layer3_units = trial.suggest_int("layer3_units", 4, layer3_units_high)
-        params["hidden_layer_sizes"] = (layer1_units, layer2_units, layer3_units)
-    else:
-        params["hidden_layer_sizes"] = (layer1_units, layer2_units)
-
-    # Debug, testing for training speed
-    # params["hidden_layer_sizes"] = (50, 50, 4)  # ~10s @330 rows
-    # params["hidden_layer_sizes"] = (100, 50, 4)  # ~15s @330 rows
-    # params["hidden_layer_sizes"] = (100, 100, 4)  # ~18s @330 rows
-    # params["hidden_layer_sizes"] = (200, 100, 4)  # ~37s @330 rows
-    # params["hidden_layer_sizes"] = (250, 250, 4)  # ~53S @330 rows
-
-    # Other hyperparameters
-    params["activation"] = "relu"
-    params["alpha"] = trial.suggest_float("alpha", 1e-5, 1e-1, log=True)
-    # params["batch_size"] = trial.suggest_int("batch_size", 4, 256, log=True)
-    params["beta_1"] = trial.suggest_float("beta_1", 0.85, 0.99)
-    params["beta_2"] = trial.suggest_float("beta_2", 0.9, 0.9999, log=True)
-    params["epsilon"] = trial.suggest_float("epsilon", 1e-9, 1e-7, log=True)
-    params["learning_rate_init"] = trial.suggest_float("learning_rate_init", 1e-4, 1e-2, log=True)
-    params["learning_rate"] = "adaptive"
-    params["max_iter"] = 1000
-    params["shuffle"] = True
-
-    # Early stopping
-    params["early_stopping"] = True  # No worries if False, it's a performance hit, but it's worth it and isn't exponentially slower
-    params["n_iter_no_change"] = 100
-    params["tol"] = 1e-5  # No worries since worst case it no early stopping
-
-    # Misc
-    params["verbose"] = False
-    params["warm_start"] = False
-
-    return params
-
-
-fixed_params = {
-    # "verbosity": 0,  # Suppress XGBRegressor output
-    # "verbose": -1,  # Suppress LGBMRegressor output
+base_models = {
+    # "mlp": mlp_reg, # VERY slow, talking 1+ hours to train, every other model is like seconds to 1-3 minutes
+    "xgb_pruned": xgb_regressor_pruned,
+    "xgb_limited": xgb_regressor_limited,
+    "lgbm": lgbm_regressor,
+    "rf": rf_regressor,
+    "et": extra_trees,
+    "dt": dt_regressor,
+    "elastic_net": elastic_net,
 }
 
-# Try SVR, ElasticNet, and a decently simple MLPRegressor before moving to stack
-model_class = MLPRegressor
+# Train and evaluate each model as a sanity check
+scores = {}
+for name, model in base_models.items():
+    print(f"Training {name} model...")
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_valid)
+    score = r2_score(y_valid, y_pred)
+    scores[name] = score
+    print(f"{name} R² score on validation set: {score:.4f}\n")
+
+# Reprint the scores
+print("Scores:")
+for name, score in scores.items():
+    print(f"{name}: {score:.4f}")
+
+# print mean score
+mean_score = np.mean(list(scores.values()))
+print(f"\nMean R² score: {mean_score:.4f}")
 
 
-# Set Optuna verbosity to WARNING, I use my own print_progress_callback to print the results
-optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-# Use Hyperband as the sampler for Optuna
-# This speeds up the optimization process by stopping bad trials early (?)
-pruner = optuna.pruners.HyperbandPruner()
-
-# Create an Optuna study to minimize/maximize the objective
-study = optuna.create_study(direction="maximize", pruner=pruner)
+# Qui
 
 
-#################################################################
-# Control functions
-#################################################################
+#########################################################################################################
+# Blended model quick test
+#########################################################################################################
+print("\n\n\n")
+print('Starting the "blended" model test...')
+# We only use the "best" few models here
+blend_base_models = {
+    "xgb_pruned": xgb_regressor_pruned,
+    "xgb_limited": xgb_regressor_limited,
+    "lgbm": lgbm_regressor,
+    "rf": rf_regressor,
+    "et": extra_trees,
+    "dt": dt_regressor,
+    "elastic_net": elastic_net,
+}
+
+# 1. Generate predictions from each model on X_valid
+predictions = []
+for name, model in blend_base_models.items():
+    pred = model.predict(X_valid)
+    predictions.append(pred)
+    # mse = mean_squared_error(y_valid, pred)
+    # print(f"Model {name} MSE: {mse}")
+    r2 = r2_score(y_valid, pred)
+    print(f"Model {name} R² score: {r2:.3f}")
+
+# 2. Compute the simple average of predictions
+#    This will average across the predictions from each model.
+blend_pred_mean = np.mean(predictions, axis=0)
+blend_pred_median = np.median(predictions, axis=0)
+blend_pred_max = np.max(predictions, axis=0)
+
+# 3. Calculate R² score for each blended prediction
+mean_blend_r2 = r2_score(y_valid, blend_pred_mean)
+median_blend_r2 = r2_score(y_valid, blend_pred_median)
+max_blend_r2 = r2_score(y_valid, blend_pred_max)
+percentile_60th_blend_r2 = r2_score(y_valid, np.percentile(predictions, 60, axis=0))
+percentile_40th_blend_r2 = r2_score(y_valid, np.percentile(predictions, 40, axis=0))
+print(f"Mean blended model R² score: {mean_blend_r2:.3f}")
+print(f"Median blended model R² score: {median_blend_r2:.3f}")
+print(f"Max blended model R² score: {max_blend_r2:.3f}")
+print(f"75th percentile blended model R² score: {percentile_60th_blend_r2:.3f}")
+print(f"25th percentile blended model R² score: {percentile_40th_blend_r2:.3f}")
 
 
-def run_study():
-    while True:
-        try:
-            study.optimize(objective, n_trials=max_trials, callbacks=[print_progress_callback])
-            break  # Exit loop if optimization completes without error
-        except KeyboardInterrupt:
-            print("Interrupted by user")
-            break  # Exit loop on manual interruption
-        except Exception as e:
-            print("An error occurred:", e)
-            print("Trying to resume study...")
+# Testing the different _combinations_
+import itertools
+
+print("\nTesting combinations of 2 to n-1 base models:")
+# Here, n is the number of base models.
+# We test for combinations of size 2 up to n-1 (thus not including the ensemble of all models,
+# which we already computed above).
+combos_and_scores = {}
+for r in range(2, len(blend_base_models)):
+    for combo in itertools.combinations(blend_base_models.keys(), r):
+        # Generate predictions for the current combination of models
+        combo_predictions = [blend_base_models[name].predict(X_valid) for name in combo]
+        # Mean-based blend
+        combo_mean_pred = np.mean(combo_predictions, axis=0)
+        mean_r2 = r2_score(y_valid, combo_mean_pred)
+        combos_and_scores[f"mean_{combo}"] = mean_r2
+
+        # Median-based blend
+        combo_median_pred = np.median(combo_predictions, axis=0)
+        median_r2 = r2_score(y_valid, combo_median_pred)
+        combos_and_scores[f"median_{combo}"] = median_r2
+
+# Sort the combinations by their R² score:
+sorted_combos = sorted(combos_and_scores.items(), key=lambda x: x[1], reverse=True)
+print("\nTop 10 combinations of models by R² score:")
+for combo, score in sorted_combos[:10]:
+    print(f"{combo}: {score:.4f}")
+
+# Reprint the random state and fraction for clarity
+print(f"\nRandom seed used: {seed}")
+print(f"Fraction of data used: {fraction}")
+
+print("Process completed. Exiting.")
 
 
-def show_best_results():
-    # Sort results by adjusted R²
-    trials_results_sorted = {k: v for k, v in sorted(trials_results.items(), key=lambda item: item[1]["adjusted_r2"], reverse=True)}
-
-    # Print the 10 best results as adjusted R², mean R2, and params
-    print("\nTop 10 best results:")
-    for i, (params, results) in enumerate(list(trials_results_sorted.items())[:10]):
-        print(f"Adjusted R²: {results['adjusted_r2']:.4f}, Mean R²: {results['mean_r2']:.4f}, Time to train: {results['time_to_train'].total_seconds():.2f}s, Params: {params}")
-
-    input("Press Enter to return to main menu...")
+#########################################################################################################
+# Stacking model test
+#########################################################################################################
 
 
-def show_hyperparameter_importances():
-    # Print hyperparameters importance
-    print("Preparing hyperparameters importances...")
-    importances = optuna.importance.get_param_importances(study)
-    print("Hyperparameters importance:")
-    print(importances)
+# print("\n\n\n")
+# print("Starting the stacked model setup and training...")
 
-    print("Visualizing importances:")
-    fig = optuna.visualization.plot_param_importances(study)
-    fig.show()
+# # Define the meta-learner
+# meta_model = Ridge()
 
+# # Turn the dict into a list of tuples
+# estimators = [(name, model) for name, model in base_models.items()]
 
-def show_slice_plot():
-    # print("Preparing slice plot...")
-    # fig = optuna.visualization.plot_slice(study)
-    # fig.show()
+# # Set up the stacking regressor
+# stacked_reg = StackingRegressor(estimators=estimators, final_estimator=meta_model, cv=5)  # Adjust the cross-validation strategy as needed
 
-    print("Preparing filtered slice plot...")
+# # Train the stacked ensemble
+# stacked_reg.fit(X_train, y_train)
 
-    # Request user input for exclusion percentiles.
-    bottom_input = input("Enter percentiles to exclude from the worst results (0-100, default 0): ").strip()
-    top_input = input("Enter percentile to exclude from the best results (0-100, default 0): ").strip()
+# # Make predictions on the test set
+# y_pred = stacked_reg.predict(X_valid)
 
-    # Convert inputs to floats; default to 0 if empty.
-    bottom_exclusion = float(bottom_input) if bottom_input else 0.0
-    top_exclusion = float(top_input) if top_input else 0.0
+# # Evaluate the model
+# print(f"Stacked model results:")
+# mse = mean_squared_error(y_valid, y_pred)
+# print(f"Mean Squared Error: {mse:.3f}")
 
-    # Filter only completed trials with valid objective values.
-    completed_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE and t.value is not None]
+# # Calculate R² score
+# r2 = r2_score(y_valid, y_pred)
+# print(f"R² score: {r2:.3f}")
 
-    if not completed_trials:
-        print("No completed trials with valid objective values found.")
-        return
-
-    values = np.array([t.value for t in completed_trials])  # Extract objective values for the completed trials.
-
-    # Determine cutoff values based on the specified exclusion percentiles.
-    lower_cutoff = np.percentile(values, bottom_exclusion)
-    upper_cutoff = np.percentile(values, 100 - top_exclusion)
-
-    # Select trials within the cutoff range.
-    filtered_trials = [t for t in completed_trials if lower_cutoff <= t.value <= upper_cutoff]
-
-    # Create a temporary study object to hold the filtered trials.
-    filtered_study = optuna.create_study(direction=study.direction)
-    for trial in filtered_trials:
-        filtered_study.add_trial(trial)
-
-    # Generate and show the slice plot.
-    fig = optuna.visualization.plot_slice(filtered_study)
-    fig.show()
+# # Reprinte the belnded model results and the individual model results, R^2 only
+# print("\n")
+# print("Blended model results:")
+# print(f"Blended Model MSE: {blend_mse}")
+# print(f"Blended Model R² score: {blend_r2:.3f}")
+# print("\n")
+# print("Individual model R² score:")  # using "scores" variable from earlier
+# for name, score in scores.items():
+#     print(f"{name}: {score:.4f}")
 
 
-def show_history_plot():
-    print("Preparing history plot...")
-    fig = optuna.visualization.plot_optimization_history(study)
-    fig.show()
-
-
-# Always start with running the study to avoid running the script without any results
-run_study()
-
-while True:
-    banner_width = 60
-    inner_width = banner_width - 2
-    print("\n" * 2)
-    print("╔" + "═" * inner_width + "╗")
-    print("║" + "MAIN MENU".center(inner_width) + "║")
-    print("║" + ("(" + model_class.__name__ + ")").center(inner_width) + "║")
-    print("╚" + "═" * inner_width + "╝")
-    print("1. Run/Resume study")
-    print("2. Show best results")
-    print("3. Show slice plot")
-    print("4. Show history plot")
-    print("5. Show hyperparameter importances")
-    print("6. Exit")
-    choice = input("")
-
-    if choice == "1":
-        run_study()
-    elif choice == "2":
-        show_best_results()
-    elif choice == "3":
-        show_slice_plot()
-    elif choice == "4":
-        show_history_plot()
-    elif choice == "5":
-        show_hyperparameter_importances()
-    elif choice == "6":
-        choice = input("Are you sure you want to exit? (y/n)")
-        if choice.lower() == "y":
-            break  # Exit the loop
-    else:
-        print("Invalid choice. Please try again.")
-        continue
-
-
-print("Script finished.")
+# print("Process completed.")
