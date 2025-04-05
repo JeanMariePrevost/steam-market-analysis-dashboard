@@ -4,16 +4,17 @@ venv/
 datasets/
 
 *.rar
-Step 1 - Processing/combined_df_cleaned.parquet
-# *.xlsx
 *.csv
-*.parquet
+*.docx
 *.feather
 *.parquet
-*.docx
-*/catboost_info/*
+*.parquet
+*catboost_info/*
 *tuning_results_*.txt
-Step 1 - Processing/saved_multiclass_models/*
-Step 1 - Processing/tuning/catboost_info/*
-Step 1 - Processing/scratch.py
-Step 1 - Processing/scratch3.py
+# *.xlsx
+scratch.py
+combined_df_cleaned.parquet
+saved_multiclass_models/*
+scratch.py
+scratch3.py
+tuning/catboost_info/*
