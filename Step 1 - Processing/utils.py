@@ -1,3 +1,4 @@
+import math
 import os
 
 import numpy as np
@@ -44,6 +45,47 @@ def load_feature_engineered_dataset_no_na() -> pd.DataFrame:
     if df is not None:
         if df.isnull().sum().sum() > 0:
             raise ValueError("The dataset contains missing values. Double-check the preprocessing steps leading to processed_no_na.parquet.")
+
+    return df
+
+
+def load_inference_dataset() -> pd.DataFrame:
+    """
+    Loads the further preprocessed dataset for "game success" inference.
+
+    This dataset lacks all:
+    - irrelevant columns (e.g. name, appid, publishers...)
+    - directly correlated columns (e.g. steam_total_reviews, steam_positive_review_ratio, peak_ccu...)
+    - outcome-related columns (e.g. , playtime_avg, achievements_count...)
+
+    Returns None if an error occurs.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
+    data_path = f"{script_dir}\\feature_engineered_output\\inference_dataset.parquet"
+
+    df = load_dataset(data_path)
+    if df is not None:
+        if df.isnull().sum().sum() > 0:
+            raise ValueError("The dataset contains missing values. Double-check the preprocessing steps leading to processed_for_inference.parquet.")
+
+    return df
+
+
+def load_baseline_element() -> pd.DataFrame:
+    """
+    Load the baseline element for inference.
+
+    This dataset is a single row with all columns set to the data's median or mode values.
+
+    Returns None if an error occurs.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
+    data_path = f"{script_dir}\\feature_engineered_output\\baseline_element.parquet"
+
+    df = load_dataset(data_path)
+    if df is not None:
+        if df.isnull().sum().sum() > 0:
+            raise ValueError("The dataset contains missing values. Double-check the preprocessing steps leading to baseline_element.parquet.")
 
     return df
 
@@ -539,3 +581,45 @@ def anova_categorical(df, numeric_col, cat_col):
     eta_sq = anova_table["sum_sq"][0] / anova_table["sum_sq"].sum()
 
     return F_stat, p_value, eta_sq
+
+
+def find_closest_string_in_list(input: str, list: list, number_of_matches: int = 1) -> list:
+    """
+    Find the closest string(s) in a list to the input string using "thefuzz" library.
+    This function uses the Levenshtein distance to measure string similarity.
+
+    Parameters:
+        input (str): The input string to compare against.
+        list (list): The list of strings to search through.
+        number_of_matches (int): The number of closest matches to return.
+
+    Returns:
+        list: A list of the closest matching strings from the input list.
+    """
+    from thefuzz import process
+
+    # Get the closest matches
+    closest_matches = process.extract(input, list, limit=number_of_matches)
+
+    # Extract only the matched strings from the tuples
+    return [match[0] for match in closest_matches]
+
+
+def step_round(value):
+    """
+    Returns numbers rounded to "visually pleasing" values based on their scale.
+    E.g. 29 -> 30, 479 -> 500, 48713 -> 50000...
+    """
+    # Everything <= a certain value is rounded to the nearest "value" for that step
+    steps = [
+        (100, 10),
+        (500, 50),
+        (1000, 100),
+        (2000, 250),
+        (5000, 500),
+        (10000, 1000),
+        (np.inf, 5000),
+    ]
+    for threshold, step in steps:
+        if value < threshold:
+            return int(round(value / step) * step)
