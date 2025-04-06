@@ -7,8 +7,6 @@ datasets/
 *.csv
 *.docx
 *.feather
-*.parquet
-*.parquet
 *catboost_info/*
 *tuning_results_*.txt
 # *.xlsx
