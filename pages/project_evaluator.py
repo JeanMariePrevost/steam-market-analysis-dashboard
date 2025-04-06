@@ -290,7 +290,9 @@ def get_score_for_prediction(prediction: list):
     return score
 
 
-with st.status("Evaluating suggestions...") as status:
+st.write("### Suggestions")
+progress_bar = st.progress(0, "Loading models...")
+with progress_bar:
 
     scores = {}
 
@@ -369,7 +371,7 @@ with st.status("Evaluating suggestions...") as status:
     count = 0
     for feature, value in tests_queue:
         count += 1
-        status.update(label=f"Analyzing possible suggestion {count}/{len(tests_queue)}...")
+        progress_bar.progress(count / len(tests_queue), f"Analyzing interactions... {count}/{len(tests_queue)}...")
         score = evaluate_feature_change_score(feature, value)
         scores[f"{feature}_to_{value}"] = score
 
@@ -381,6 +383,7 @@ with st.status("Evaluating suggestions...") as status:
     for score in scores:
         scores[score] = scores[score] - user_input_baseline_score
 
+progress_bar.empty()
 print("Scores:")
 # Sort the scores dictionary by value in descending order
 sorted_scores = dict(sorted(scores.items(), key=lambda item: item[1], reverse=True))
@@ -392,7 +395,6 @@ for label, score in sorted_scores.items():
 
 # Display the top N suggestions
 suggestions_to_show = 9999
-st.write("### Suggestions")
 st.write("This table displays the changes most likely to impact the estimated playerbase.")
 st.write("The higher the score, the stronger the predicted positive impact.")
 

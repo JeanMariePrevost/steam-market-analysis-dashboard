@@ -676,6 +676,6 @@ def display_streamlit_custom_navigation():
         st.subheader("Retrospective Analysis")
         st.page_link("pages/general_market_trends.py", label="Market Overview & General Trends")
         st.page_link("pages/free_vs_paid.py", label="Free vs Paid Model Analysis")
-        st.page_link("pages/releases_by_price.py", label="Price Point Analysis")
+        st.page_link("pages/releases_by_price.py", label="Game Price Analysis")
         st.page_link("pages/tag_trends.py", label="Keyword Analysis")
         st.page_link("pages/success_factors.py", label="Success Factor Analysis")

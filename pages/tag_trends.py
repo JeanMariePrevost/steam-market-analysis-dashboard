@@ -10,7 +10,7 @@ from scipy.signal import savgol_filter
 import utils
 
 # Page configuration & custom CSS
-st.set_page_config(page_title="Tags Trends")
+st.set_page_config(page_title="Keyword Analysis")
 utils.display_streamlit_custom_navigation()
 st.markdown(
     """
@@ -59,18 +59,18 @@ st.sidebar.caption(
 
 
 # Debug, pick a random tag if none is selected
-if selected_tag == "Select a Tag":
-    st.warning("DEBUG! Picking a random tag for demonstration purposes.")
-    random_tag = random.choice(tag_options[1:])  # Exclude the first element "Select a Tag"
-    selected_tag_display = random_tag
-    selected_tag = tag_mapping.get(random_tag, "Select a Tag")
+# if selected_tag == "Select a Tag":
+#     st.warning("DEBUG! Picking a random tag for demonstration purposes.")
+#     random_tag = random.choice(tag_options[1:])  # Exclude the first element "Select a Tag"
+#     selected_tag_display = random_tag
+#     selected_tag = tag_mapping.get(random_tag, "Select a Tag")
 
 
 ############################################
 # Preparation and setup
 ############################################
 # Page Title & Description
-st.title(f'Tag Trends Analysis ("{selected_tag}")')
+st.title(f'Keyword Analysis ("{selected_tag}")')
 
 if df is None or df.empty:
     st.error(f"Data could not be loaded. Please ensure the path is correct and the data is available.")
@@ -415,7 +415,8 @@ st.write(
     The values represent the difference in average positive review ratio between games with and without the tag."""
 )
 
-with st.spinner("Running...", show_time=True):
+progress_bar = st.progress(0, text="Analyzing tag interactions...")
+with progress_bar:
     min_sample_size = 10  # Won't consider interactions with fewer games
     number_of_interactions = 10  # How many interactions to show for _each_ best and worst
 
@@ -424,7 +425,10 @@ with st.spinner("Running...", show_time=True):
 
     tag_deltas = {}
 
+    count = 0
     for tag in tag_mapping.values():
+        count += 1
+        progress_bar.progress(count / len(tag_mapping), text=f"Analyzing tag interactions... {count}/{len(tag_mapping)}")
         if tag == selected_tag:  # Skip the selected tag itself
             continue
 
@@ -473,3 +477,5 @@ with st.spinner("Running...", show_time=True):
     plt.ylabel("Tags")
     plt.tight_layout()
     st.pyplot(fig)
+
+# progress_bar.empty()
