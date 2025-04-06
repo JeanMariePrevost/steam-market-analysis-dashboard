@@ -12,8 +12,10 @@ datasets/
 # *.xlsx
 scratch.py
 combined_df_cleaned.parquet
-saved_multiclass_models/*
 scratch.py
 scratch3.py
 scripts_tuning/catboost_info/*
 source_datasets/*
+saved_multiclass_models/catboost_classifier_qwk.joblib
+saved_multiclass_models/et_classifier_qwk.joblib
+saved_multiclass_models/rf_classifier_qwk.joblib
