@@ -7,20 +7,14 @@ from pathlib import Path
 
 import joblib
 import numpy as np
-import optuna
 import pandas as pd
-from catboost import CatBoostClassifier, CatBoostRegressor
-from lightgbm import LGBMClassifier, LGBMRegressor
-from optuna.trial import TrialState
-from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor, RandomForestClassifier, RandomForestRegressor, StackingRegressor
-from sklearn.linear_model import ElasticNet, Ridge
-from sklearn.metrics import cohen_kappa_score, mean_squared_error, r2_score
-from sklearn.model_selection import cross_val_score, train_test_split
-from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import QuantileTransformer, StandardScaler
-from sklearn.svm import SVR, LinearSVR
-from sklearn.tree import DecisionTreeRegressor
-from xgboost import XGBClassifier, XGBRegressor
+from catboost import CatBoostClassifier
+from lightgbm import LGBMClassifier
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
+from sklearn.metrics import cohen_kappa_score
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import QuantileTransformer
+from xgboost import XGBClassifier
 
 # Add the parent directory of the script to sys.path, cause since we moved the script to a new folder, it can't find the utils module
 # This is a hack, but it works good enough for a quick and dirty script

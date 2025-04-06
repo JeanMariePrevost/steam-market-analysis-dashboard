@@ -1,5 +1,6 @@
 import math
 import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -14,8 +15,9 @@ def load_main_dataset() -> pd.DataFrame:
     Load the preprocessed data from the parquet file.
     Returns None if an error occurs.
     """
-    script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-    data_path = f"{script_dir}\\preprocessed_output\\combined_df_preprocessed_dense.parquet"
+    current_file = Path(__file__).resolve()
+    root_dir = current_file.parent
+    data_path = root_dir / "output_preprocessed" / "combined_df_preprocessed_dense.parquet"
 
     return load_dataset(data_path)
 
@@ -26,8 +28,9 @@ def load_feature_engineered_dataset_with_na() -> pd.DataFrame:
     This version retains rows with missing values and does not impute anything.
     Returns None if an error occurs.
     """
-    script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-    data_path = f"{script_dir}\\feature_engineered_output\\processed_allow_na.parquet"
+    current_file = Path(__file__).resolve()
+    root_dir = current_file.parent
+    data_path = root_dir / "output_feature_engineered" / "processed_with_na.parquet"
 
     return load_dataset(data_path)
 
@@ -38,8 +41,9 @@ def load_feature_engineered_dataset_no_na() -> pd.DataFrame:
     This version imputes missing values in various ways.
     Returns None if an error occurs.
     """
-    script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-    data_path = f"{script_dir}\\feature_engineered_output\\processed_no_na.parquet"
+    current_file = Path(__file__).resolve()
+    root_dir = current_file.parent
+    data_path = root_dir / "output_feature_engineered" / "processed_no_na.parquet"
 
     df = load_dataset(data_path)
     if df is not None:
@@ -60,8 +64,9 @@ def load_inference_dataset() -> pd.DataFrame:
 
     Returns None if an error occurs.
     """
-    script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-    data_path = f"{script_dir}\\feature_engineered_output\\inference_dataset.parquet"
+    current_file = Path(__file__).resolve()
+    root_dir = current_file.parent
+    data_path = root_dir / "output_feature_engineered" / "inference_dataset.parquet"
 
     df = load_dataset(data_path)
     if df is not None:
@@ -79,8 +84,9 @@ def load_baseline_element() -> pd.DataFrame:
 
     Returns None if an error occurs.
     """
-    script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-    data_path = f"{script_dir}\\feature_engineered_output\\baseline_element.parquet"
+    current_file = Path(__file__).resolve()
+    root_dir = current_file.parent
+    data_path = root_dir / "output_feature_engineered" / "baseline_element.parquet"
 
     df = load_dataset(data_path)
     if df is not None:

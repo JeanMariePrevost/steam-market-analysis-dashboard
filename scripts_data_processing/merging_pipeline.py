@@ -4,15 +4,24 @@ The process is not particularly clean or optimized, but it should be a one-time 
 """
 
 import json
-import pandas as pd
-import numpy as np
 import os
 import subprocess
+import sys
+from pathlib import Path
 
-from complex_merge import merge_dataframes_with_mappings, combine_list_unique_values
+import numpy as np
+import pandas as pd
+
+# Allow importing modules from the parent directory of this script
+current_file = Path(__file__).resolve()
+parent_dir = current_file.parent.parent
+sys.path.insert(0, str(parent_dir))
+
+from scripts_data_processing.complex_merge import combine_list_unique_values, merge_dataframes_with_mappings
 
 # Selected datasets paths
-datasets_directory = r"F:\OneDrive\MyDocs\Study\TELUQ\Session 8 - Hiver 2025\SCI 1402\datasets"
+current_dir = Path(__file__).resolve().parent
+datasets_directory = current_dir.parent / "source_datasets"
 # Great general metadata foundation
 set1_path = f"{datasets_directory}\\artermiloff_steam-games-dataset\\games_may2024_cleaned.csv"
 # grab price_final and price_original
@@ -39,8 +48,7 @@ set11_path = f"{datasets_directory}\\souyama_steam-dataset\\steam_dataset\appinf
 set12_path = f"{datasets_directory}\\kasumil5x_howlongtobeat-games-completion-times\\games.csv"
 
 # Define and create output directory if it doesn't exist
-script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-output_dir = os.path.join(script_dir, "merge_output")  # Define the output directory relative to the script's location
+output_dir = current_dir.parent / "output_merging"
 os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists
 
 combined_df = pd.DataFrame()  # The "container" for the final merged DataFrame

@@ -6,24 +6,19 @@ NOTE: This processing does _not_ normalize all numerical fields, which is left t
 """
 
 import os
+import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
 
-from utils import load_main_dataset
+# Allow importing modules from the parent directory of this script
+current_file = Path(__file__).resolve()
+parent_dir = current_file.parent.parent
+sys.path.insert(0, str(parent_dir))
 
-# def is_any_kind_of_na(value):
-#     if value == []:
-#         return True
-#     if value == "":
-#         return True
-#     if value == None:
-#         return True
-#     if value == pd.NA:
-#         return True
-#     return False
+from utils import load_main_dataset
 
 
 def median_fillna(col):
@@ -450,8 +445,8 @@ print(len(df_no_na["publishers"].unique()))
 print(df_no_na["publishers"].unique())
 
 # Define and create output directory if it doesn't exist
-script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-output_dir = os.path.join(script_dir, "feature_engineered_output")  # Define the output directory relative to the script's location
+root_dir = current_file.parent.parent
+output_dir = root_dir / "output_feature_engineered"
 os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists
 
 # Save the processed data

@@ -1,9 +1,16 @@
 # Debug, load inference dataset and print a few infos about it
 import os
+import sys
+from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
+
+# Allow importing modules from the parent directory of this script
+current_file = Path(__file__).resolve()
+parent_dir = current_file.parent.parent
+sys.path.insert(0, str(parent_dir))
 
 import utils
 
@@ -114,7 +121,7 @@ print(baseline_element)
 
 # Save the baseline element
 filename = "baseline_element.parquet"
-filepath = os.path.join("feature_engineered_output", filename)
+filepath = os.path.join("output_feature_engineered", filename)
 baseline_element.to_parquet(filepath, index=False)  # Save as parquet
 
 

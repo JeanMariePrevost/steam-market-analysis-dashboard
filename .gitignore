@@ -17,4 +17,5 @@ combined_df_cleaned.parquet
 saved_multiclass_models/*
 scratch.py
 scratch3.py
-tuning/catboost_info/*
+scripts_tuning/catboost_info/*
+source_datasets/*

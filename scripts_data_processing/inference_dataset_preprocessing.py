@@ -16,10 +16,17 @@ Testing the most "lightweight" version of using 3 pre-trained models to perform 
 
 
 import os
+import sys
+from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
+
+# Allow importing modules from the parent directory of this script
+current_file = Path(__file__).resolve()
+parent_dir = current_file.parent.parent
+sys.path.insert(0, str(parent_dir))
 
 import utils
 
@@ -105,9 +112,9 @@ df = pd.concat([X, y], axis=1)
 df = df.dropna()  # Drop rows with NaN values
 
 # save as parquet
-df.to_parquet("feature_engineered_output/inference_dataset.parquet", index=False)  # We _want_ the index out this time, bbecause appid is _not_ a good independent variable
+df.to_parquet("output_feature_engineered/inference_dataset.parquet", index=False)  # We _want_ the index out this time, bbecause appid is _not_ a good independent variable
 print("Inference dataset saved as parquet.")
 
 # Save to csv for debugging purposes
-df.to_csv("feature_engineered_output/inference_dataset.csv", index=False)  # We _want_ the index out this time, bbecause appid is _not_ a good independent variable
+df.to_csv("output_feature_engineered/inference_dataset.csv", index=False)  # We _want_ the index out this time, bbecause appid is _not_ a good independent variable
 print("Inference dataset saved as CSV.")

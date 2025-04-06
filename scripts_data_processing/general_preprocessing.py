@@ -5,21 +5,28 @@ It also introduces new columns and normalizes existing ones for better usability
 However, it retains "human-readable" features such as tags, genres and languages as lists of strings.
 """
 
-import pandas as pd
-import numpy as np
+import ast
 import os
 import subprocess
-import ast
+import sys
+from pathlib import Path
 
+import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
+# Allow importing modules from the parent directory of this script
+current_file = Path(__file__).resolve()
+parent_dir = current_file.parent.parent
+sys.path.insert(0, str(parent_dir))
+
+from utils import collapse_pseudo_duplicate_games
 
 # Define and create output directory if it doesn't exist
-script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the script itself
-output_dir = os.path.join(script_dir, "preprocessed_output")  # Define the output directory relative to the script's location
+current_dir = Path(__file__).resolve().parent
+output_dir = current_dir.parent / "output_preprocessed"
 os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists
-
-source_csv_path = os.path.join(script_dir, "merge_output/combined_df_final.csv")
+source_csv_path = current_dir.parent / "output_merging" / "combined_df_final.csv"
 
 
 ####################################################################
@@ -33,7 +40,7 @@ def enforce_float_or_nan_column(df, column_name):
     print(f"{column_name} fully numerical (floats) ✅")
 
 
-def enforce_int_or_nan_column(df, column_name, verbose=True):
+def enforce_int_or_nan_column(df, column_name):
     """Enforces a column as integers, squashing all non-numeric values to NaN. Any floats will also be converted to integers (truncated)."""
     if column_name not in df.columns:
         raise KeyError(f"Column '{column_name}' does not exist in the DataFrame.")
@@ -763,8 +770,6 @@ if all_columns:
 # Many records appear a BUNCH of times for technical reasons, often a single of the enties being the "actual game"
 # For example see "Shadow of the Tomb Raider: Definitive Edition"
 # We'll collapse these into a single record, keeping the most complete information and highest numerical values
-
-from utils import collapse_pseudo_duplicate_games
 
 df = collapse_pseudo_duplicate_games(df)
 
