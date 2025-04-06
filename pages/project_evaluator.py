@@ -27,7 +27,8 @@ st.markdown(
 st.title("Project Viability Estimator")
 st.write("This page provides a tool to estimate the viability of your project based on historical data from Steam.")
 st.write("These are only projected estimations, and should not be used as a definitive measure of success.")
-st.info(
+st.info("See information in the sidebar for instructions on how to use this tool.")
+st.warning(
     """Limitations:
     
 Predictions from multiple machine learning models are blended to achieve
