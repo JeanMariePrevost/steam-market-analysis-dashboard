@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as stats
 import statsmodels.api as sm
+import streamlit as st
 from scipy.stats import norm
 from statsmodels.formula.api import ols
 
@@ -629,3 +630,52 @@ def step_round(value):
     for threshold, step in steps:
         if value < threshold:
             return int(round(value / step) * step)
+
+
+def display_streamlit_custom_navigation():
+    """
+    Displays a custom navigation menu in the Streamlit sidebar
+    Must be called in each page, after the st.set_page_config() call.
+    """
+    with st.sidebar.expander("Navigation", expanded=True):
+
+        # Inject custom CSS
+        st.markdown(
+            """
+            <style>
+            [data-testid="stSidebarHeader"] {
+                display: none;
+            }
+            
+            hr {
+                margin-top: 0.5rem !important;
+                margin-bottom: -0.2rem !important;
+            }
+            
+            .stVerticalBlock {
+                gap: 0.7rem; /* Reduce overall gap, to have the separators not take up so much space, we replace it with per-item margins */
+            }
+            
+            .stVerticalBlock .stHeading {
+                margin: 0.25rem 0;
+            }
+            
+
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # st.header("Navigation")
+        st.page_link("streamlit_main.py", label="Homepage")
+
+        st.markdown("---")
+        st.subheader("Prospective Analysis")
+        st.page_link("pages/project_evaluator.py", label="Project Evaluation Tool")
+
+        st.markdown("---")
+        st.subheader("Retrospective Analysis")
+        st.page_link("pages/general_market_trends.py", label="Market Overview & General Trends")
+        st.page_link("pages/free_vs_paid.py", label="Free vs Paid Model Analysis")
+        st.page_link("pages/releases_by_price.py", label="Price Point Analysis")
+        st.page_link("pages/tag_trends.py", label="Keyword Analysis")
+        st.page_link("pages/success_factors.py", label="Success Factor Analysis")

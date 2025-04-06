@@ -11,6 +11,7 @@ import utils
 
 # Page configuration & custom CSS
 st.set_page_config(page_title="Tags Trends")
+utils.display_streamlit_custom_navigation()
 st.markdown(
     """
     <style>

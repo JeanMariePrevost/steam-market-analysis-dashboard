@@ -10,6 +10,7 @@ import utils
 
 # Page configuration & custom CSS
 st.set_page_config(page_title="Overview of Releases & Trends")
+utils.display_streamlit_custom_navigation()
 st.markdown(
     """
     <style>
@@ -29,11 +30,11 @@ st.write("These are only projected estimations, and should not be used as a defi
 st.info(
     """Limitations:
     
-Multiple machine learning models predictions are blended to achieve
+Predictions from multiple machine learning models are blended to achieve
 a more stable and accurate (QWK ≈ 0.7507) estimated number of ***steam reviews***,
 used as a direct ***proxy*** for the number of players.
 
-The models rely of historical data and may not predict unknown combinations of features accurately.
+The models rely on historical data and may not predict unknown combinations of features accurately.
 """
 )
 

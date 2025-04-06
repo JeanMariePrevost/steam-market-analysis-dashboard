@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 from matplotlib.ticker import AutoMinorLocator
 
+import utils
 from utils import load_main_dataset, remove_outliers_iqr
 
 ##############################
@@ -13,6 +14,7 @@ df = load_main_dataset()
 
 # Page configuration & custom CSS
 st.set_page_config(page_title="Free vs F2P vs Paid: Market Trends on Steam")
+utils.display_streamlit_custom_navigation()
 st.markdown(
     """
     <style>
@@ -153,7 +155,7 @@ st.pyplot(fig6)
 # TODO - Move the number of tags to a sidebar slider
 # TODO - Add a dropdown to select the metric to analyze instead of showing multiple?
 # TODO - Set an input for the smoothing parameter k in the Bayesian shrinkage (and does a value of 0 disable it?)
-st.write("### 5. Best and Worse Tags by Various Metrics")
+st.write("### 5. Best and Worst Tags by Metrics")
 
 
 def get_relative_impact_by_tag(df, monetization_model, metric) -> pd.DataFrame:

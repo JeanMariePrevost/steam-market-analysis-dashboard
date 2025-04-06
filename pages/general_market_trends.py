@@ -5,10 +5,12 @@ import pandas as pd
 import streamlit as st
 from matplotlib.ticker import AutoMinorLocator
 
+import utils
 from utils import load_main_dataset
 
 # Page configuration & custom CSS
 st.set_page_config(page_title="Overview of Releases & Trends")
+utils.display_streamlit_custom_navigation()
 st.markdown(
     """
     <style>
@@ -70,7 +72,7 @@ st.pyplot(fig1)
 ##############################
 # st.write("### 1. Total Players Across Years")
 st.write("And below we see the total number of owners across all games released in each year.")
-st.write("We see that even though the number of titles grow, and Steam's MAU grows, the purchases of games in recent years appears to decline, suggesting a displacement towards older titles.")
+st.write("We see that even though the number of titles grow, and Steam's MAU grows, the purchases of games in recent years appear to decline, suggesting a displacement towards older titles.")
 release_counts = filtered_df.groupby("release_year")["estimated_owners_boxleiter"].sum().reset_index(name="count")
 
 fig1, ax1 = plt.subplots(figsize=(10, 5))

@@ -54,6 +54,7 @@ if "selected_tag_display" not in st.session_state:
 ############################################
 # Sidebar
 ############################################
+utils.display_streamlit_custom_navigation()
 # Sidebar Filter: Release Year Range
 st.sidebar.title("Filters")
 

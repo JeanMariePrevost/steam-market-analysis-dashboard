@@ -7,6 +7,7 @@ import streamlit as st
 from matplotlib.ticker import AutoMinorLocator
 from scipy.stats import gaussian_kde
 
+import utils
 from utils import load_main_dataset, triangular_weighted_mean
 
 # Load Data
@@ -31,6 +32,7 @@ st.set_page_config(
     page_title="Releases by Price",
     # page_icon="👋",
 )
+utils.display_streamlit_custom_navigation()
 
 
 # Inject custom CSS with st.markdown
