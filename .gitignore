@@ -19,3 +19,4 @@ source_datasets/*
 saved_multiclass_models/catboost_classifier_qwk.joblib
 saved_multiclass_models/et_classifier_qwk.joblib
 saved_multiclass_models/rf_classifier_qwk.joblib
+scripts_misc/scratch4.py

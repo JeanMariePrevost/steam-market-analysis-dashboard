@@ -53,6 +53,9 @@ st.sidebar.markdown(
     - Hit ctrl+enter to submit
     """
 )
+
+st.sidebar.page_link("pages/features_reference.py", label="See the list of accepted features", icon="ℹ️")
+
 input_text = st.sidebar.text_area(
     "Features",
     placeholder="""e.g.
