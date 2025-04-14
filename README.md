@@ -9,8 +9,15 @@ This project was developed for the "SCI 1402 - Projet en science des données" c
 ## Links
 
 - **Video demonstration:** (planned)
-- **Latest release:** [GitHub Releases](https://github.com/JeanMariePrevost/steam-market-analysis-dashboard/releases)
-- **Web version (hosted on Streamlit):** [Streamlit App](https://steam-market-analysis-dashboard-nzn37ojbps43zhj7twa.streamlit.app/)
+- **Latest release:** https://github.com/JeanMariePrevost/steam-market-analysis-dashboard/releases
+- **Web version (hosted on Streamlit):** https://steam-market-analysis-dashboard-nzn37ojbps43zhj7twa.streamlit.app/
+
+## Screenshots
+
+<img src="https://raw.githubusercontent.com/JeanMariePrevost/steam-market-analysis-dashboard/main/screenshots/MarketOverview.png" alt="Market Overview" width="500" />
+<img src="https://raw.githubusercontent.com/JeanMariePrevost/steam-market-analysis-dashboard/main/screenshots/ProjectEvaluation.png" alt="Project Evaluation" width="500" />
+<img src="https://raw.githubusercontent.com/JeanMariePrevost/steam-market-analysis-dashboard/main/screenshots/PriceAnalysis.png" alt="Price Analysis" width="500" />
+
 
 ## Features
 
