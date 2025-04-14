@@ -10,7 +10,7 @@ This project was developed for the "SCI 1402 - Projet en science des données" c
 
 - **Video demonstration:** (planned)
 - **Latest release:** https://github.com/JeanMariePrevost/steam-market-analysis-dashboard/releases
-- **Web version (hosted on Streamlit):** https://steam-market-analysis-dashboard-nzn37ojbps43zhj7twa.streamlit.app/
+- **Web version (hosted on Streamlit):** https://steam-market-analysis-dashboard-nzn37ojzujbps43zhj7twa.streamlit.app/
 
 ## Screenshots
 
