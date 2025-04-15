@@ -8,7 +8,7 @@ This project was developed for the "SCI 1402 - Projet en science des données" c
 
 ## Links
 
-- **Video demonstration:** (planned)
+- **Video demonstration:** https://youtu.be/NV8adS6gTLw
 - **Latest release:** https://github.com/JeanMariePrevost/steam-market-analysis-dashboard/releases
 - **Web version (hosted on Streamlit):** https://steam-market-analysis-dashboard-nzn37ojzujbps43zhj7twa.streamlit.app/
 
@@ -22,27 +22,27 @@ This project was developed for the "SCI 1402 - Projet en science des données" c
 ## Features
 
 ### Data Exploration and Analysis
-• Static analyses of the combined dataset  
-• Customizable analytical views
+- Static analyses of the combined dataset  
+- Customizable analytical views
 
 ### Predictive Modeling
-• Project success projections  
-• Blended classification model incorporating Scikit-learn, XGBoost, and LightGBM
+- Project success projections  
+- Blended classification model incorporating Scikit-learn, XGBoost, and LightGBM
 
 ## Technologies
 
 ### Primary Language
-• Python
+- Python
 
 ### Core Libraries
-• Streamlit
-• Pandas  
-• NumPy  
-• Matplotlib  
-• Scikit-learn  
-• XGBoost  
-• LightGBM
-• Parquet
+- Streamlit
+- Pandas  
+- NumPy  
+- Matplotlib  
+- Scikit-learn  
+- XGBoost  
+- LightGBM
+- Parquet
 
 ## Installation and Deployment
 
